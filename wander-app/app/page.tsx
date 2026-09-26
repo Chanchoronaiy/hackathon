@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Bookmark, ChevronUp, Cloud, Coffee, Compass, Leaf, Palette, Sun, Trees, X } from "lucide-react";
+import { Bookmark, CalendarDays, ChevronUp, Cloud, Coffee, Compass, Leaf, Map, Palette, Sun, Trees, Users, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
@@ -135,10 +135,11 @@ export default function Home() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [heatEscapeOpen, setHeatEscapeOpen] = useState(false);
   const [heatEscape, setHeatEscape] = useState<{ shade: number; coolerMinutes: number } | null>(null);
-  const [brandMenuOpen, setBrandMenuOpen] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
   const [savedTrials, setSavedTrials] = useState<SavedTrial[]>([]);
   const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [plannerOpen, setPlannerOpen] = useState(false);
+  const [homeTab, setHomeTab] = useState<"map" | "explore" | "memories" | "saved" | "friends">("map");
 
   const totalMinutes = wanderHours * 60 + wanderMinutes;
   const planMinutes = Math.max(5, Math.min(180, totalMinutes || 0));
@@ -252,9 +253,6 @@ export default function Home() {
     );
     return () => { cancelled = true; };
   }, [applyStart]);
-  const weatherDetail = weather
-    ? `Feels ${weather.apparent}° · UV ${weather.uvIndex} · ${weather.time}`
-    : "Modelled · Adelaide";
 
   const applyPlan = useCallback((nextPlan?: Plan) => {
     if (!nextPlan && totalMinutes < 1) return;
@@ -397,8 +395,9 @@ export default function Home() {
       startName: trial.startName,
     });
     setSavedOpen(false);
-    setBrandMenuOpen(false);
     setSaveNote(null);
+    setHomeTab("map");
+    setPlannerOpen(false);
   }, [applyPlan, applyStart, clearToVictoriaSquare]);
 
   function toggleInterest(id: string) {
@@ -410,7 +409,61 @@ export default function Home() {
   const shellClass = [
     "app-shell",
     fogActive ? "mode-fog fog-mode" : displayMode === "heat" ? "mode-heat" : "mode-discover",
+    plannerOpen ? "planner-open" : "home-view",
   ].join(" ");
+
+  const showMapChrome = !plannerOpen;
+  const showHomeDock = showMapChrome && !fogActive;
+
+  function toggleFog() {
+    if (fogActive) {
+      setFogActive(false);
+      setHomeTab("map");
+      return;
+    }
+    setFogActive(true);
+    setHomeTab("explore");
+    setSavedOpen(false);
+    setPlannerOpen(false);
+    setHeatEscapeOpen(false);
+  }
+
+  function openPlanner() {
+    setPlannerOpen(true);
+    setSavedOpen(false);
+    setHeatEscapeOpen(false);
+    setHomeTab("map");
+  }
+
+  function closePlanner() {
+    setPlannerOpen(false);
+  }
+
+  function goHomeTab(tab: typeof homeTab) {
+    setHomeTab(tab);
+    if (tab === "map") {
+      setFogActive(false);
+      setSavedOpen(false);
+      setPlannerOpen(false);
+      return;
+    }
+    if (tab === "explore") {
+      setFogActive(true);
+      setSavedOpen(false);
+      setPlannerOpen(false);
+      setHeatEscapeOpen(false);
+      return;
+    }
+    if (tab === "saved") {
+      setFogActive(false);
+      setSavedOpen(true);
+      setPlannerOpen(false);
+      setSaveNote(null);
+      return;
+    }
+    setFogActive(false);
+    setSavedOpen(false);
+  }
 
   return (
     <main className={shellClass}>
@@ -423,69 +476,98 @@ export default function Home() {
         onExploreStop={handleExploreStop}
         onExplorationPercent={setExplorationPercent}
       />
-      <header className="topbar">
-        <div className={`brand-menu${brandMenuOpen ? " is-open" : ""}`}>
-          <button
-            type="button"
-            className="brand-mark"
-            aria-label="Open Wander menu"
-            aria-expanded={brandMenuOpen}
-            onClick={() => {
-              setBrandMenuOpen((open) => !open);
-              setSavedOpen(false);
-            }}
-          >
-            <Compass size={19} strokeWidth={2.4} />
-          </button>
-          {brandMenuOpen && (
-            <div className="brand-menu-actions">
-              <button
-                type="button"
-                className="brand-action"
-                aria-label="Save current wander and open saved trials"
-                onClick={handleSaveTrial}
-              >
-                <Bookmark size={18} />
-                <span>Save</span>
-              </button>
-              <button
-                type="button"
-                className={`brand-action${fogActive ? " active" : ""}`}
-                aria-pressed={fogActive}
-                aria-label={fogActive ? "Exit exploration fog view" : "Explore unexplored areas on the map"}
-                onClick={() => {
-                  setFogActive((open) => !open);
-                  setBrandMenuOpen(false);
-                  setSavedOpen(false);
-                  setHeatEscapeOpen(false);
+
+      {showMapChrome && (
+        <>
+          <header className="home-top">
+            <div className="home-search">
+              <StartSearch
+                variant="home"
+                placeholder="Search Adelaide"
+                ariaLabel="Search Adelaide"
+                value={startQuery}
+                onQueryChange={(query) => {
+                  setStartQuery(query);
+                  if (!query.trim()) {
+                    clearToVictoriaSquare(true);
+                    setLocationStatus("idle");
+                  }
                 }}
-              >
-                {fogActive ? <X size={18} /> : <Cloud size={18} />}
-                <span>{fogActive ? "Exit" : "Explore"}</span>
+                onSelect={(suggestion) => applyStart(suggestion, { fromUser: true })}
+                onUseMyLocation={useMyLocation}
+                locating={locationStatus === "locating"}
+                statusNote={null}
+              />
+            </div>
+          </header>
+
+          <aside className="home-rail" aria-label="Map controls">
+            <button
+              type="button"
+              className={`home-rail-chip${fogActive ? " is-on" : ""}`}
+              aria-pressed={fogActive}
+              aria-label={fogActive ? "Turn fog exploration off" : "Turn fog exploration on"}
+              onClick={toggleFog}
+            >
+              <Cloud size={18} strokeWidth={2.2} />
+              <span>{fogActive ? "On" : "Off"}</span>
+            </button>
+          </aside>
+
+          <div className="home-explore-pill" aria-live="polite">
+            <span className="home-explore-dot" aria-hidden="true" />
+            <span>{explorationPercent.toFixed(0)}% explored</span>
+          </div>
+
+          {showHomeDock && (
+            <div className="home-dock">
+              <button className="start-wander" type="button" onClick={openPlanner}>
+                <span>Start wandering</span>
               </button>
+              <nav className="home-nav" aria-label="Primary">
+                <button
+                  type="button"
+                  className={homeTab === "map" && !savedOpen ? "is-active" : ""}
+                  onClick={() => goHomeTab("map")}
+                >
+                  <Map size={20} strokeWidth={2.2} />
+                  <span>Map</span>
+                </button>
+                <button
+                  type="button"
+                  className={homeTab === "explore" ? "is-active" : ""}
+                  onClick={() => goHomeTab("explore")}
+                >
+                  <Compass size={20} strokeWidth={2.2} />
+                  <span>Explore</span>
+                </button>
+                <button type="button" className={homeTab === "memories" ? "is-active" : ""} disabled aria-disabled>
+                  <CalendarDays size={20} strokeWidth={2.2} />
+                  <span>Memories</span>
+                </button>
+                <button
+                  type="button"
+                  className={homeTab === "saved" || savedOpen ? "is-active" : ""}
+                  onClick={() => goHomeTab("saved")}
+                >
+                  <Bookmark size={20} strokeWidth={2.2} />
+                  <span>Saved</span>
+                </button>
+                <button type="button" className={homeTab === "friends" ? "is-active" : ""} disabled aria-disabled>
+                  <Users size={20} strokeWidth={2.2} />
+                  <span>Friends</span>
+                </button>
+              </nav>
             </div>
           )}
-        </div>
-        {fogActive ? (
-          <div className="explore-pill" aria-live="polite" aria-label="Exploration of the current map view">
-            <span className="explore-you">You</span>
-            <strong>{explorationPercent.toFixed(1)}%</strong>
-            <span className="explore-meta">{exploredIds.length} places cleared</span>
-          </div>
-        ) : (
-          <div className="weather-pill" aria-label="Current modelled Adelaide weather">
-            <Sun size={16} />
-            <span>{weather ? `${weather.temperature}°` : "—°"}</span>
-            <span className="weather-detail">{weatherDetail}</span>
-          </div>
-        )}
-      </header>
+        </>
+      )}
 
       {savedOpen && !fogActive && (
         <aside className="saved-panel" aria-live="polite">
           <div className="saved-panel-head">
             <strong>Saved trials</strong>
-            <button type="button" aria-label="Close saved trials" onClick={() => setSavedOpen(false)}>
+            <button type="button" aria-label="Close saved trials" onClick={() => { setSavedOpen(false); setHomeTab("map"); }}>
               <X size={17} />
             </button>
           </div>
@@ -524,89 +606,95 @@ export default function Home() {
         </aside>
       )}
 
-      <div className="left-stack" hidden={fogActive}>
-        <section className="planner" aria-label="Wander planner">
-          <StartSearch
-            value={startQuery}
-            onQueryChange={(query) => {
-              setStartQuery(query);
-              if (!query.trim()) {
-                clearToVictoriaSquare(true);
-                setLocationStatus("idle");
-              }
-            }}
-            onSelect={(suggestion) => applyStart(suggestion, { fromUser: true })}
-            onUseMyLocation={useMyLocation}
-            locating={locationStatus === "locating"}
-            statusNote={null}
-          />
-          <fieldset className="mode-switch" aria-label="Route mode">
-            <button className={mode === "discover" ? "active" : ""} onClick={() => setMode("discover")} type="button"><Leaf size={18} /> Discover</button>
-            <button className={mode === "heat" ? "active heat" : ""} onClick={() => setMode("heat")} type="button"><Sun size={18} /> Beat the heat</button>
-          </fieldset>
-
-          <div className="time-block">
-            <span className="field-label">Time to wander</span>
-            <fieldset className="time-boxes">
-              <legend className="sr-only">Hours and minutes to wander</legend>
-              <label className="time-box">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={3}
-                  value={wanderHours}
-                  aria-label="Hours"
-                  onChange={(event) => {
-                    const raw = event.target.value;
-                    if (raw === "") {
-                      setWanderHours(0);
-                      return;
-                    }
-                    const next = Number(raw);
-                    setWanderHours(Number.isFinite(next) ? Math.max(0, Math.min(3, Math.trunc(next))) : 0);
-                  }}
-                />
-                <span>hours</span>
-              </label>
-              <MinuteRuler value={wanderMinutes} onChange={setWanderMinutes} />
-            </fieldset>
-          </div>
-
-          <div className="interest-block"><span className="field-label">Make it more you</span><div className="chips">
-            {interests.map(({ id, label, icon: Icon }) => (
-              <button key={id} type="button" aria-pressed={selected.includes(id)} className={selected.includes(id) ? "selected" : ""} onClick={() => toggleInterest(id)}><Icon size={15} /> {label}</button>
-            ))}
-          </div></div>
-
-          <button className="generate" type="button" disabled={generating || totalMinutes < 1} onClick={() => applyPlan()}>
-            <span>{generating ? "Drawing loop…" : "Find my wander"}</span>
-            <span aria-hidden="true">{generating ? "…" : "→"}</span>
-          </button>
-        </section>
-
-        <AboutRoute
-          route={route}
-          routeCopy={routeCopy}
-          empty={!hasRoute}
-          open={aboutOpen}
-          onToggle={() => setAboutOpen((current) => !current)}
-        />
-      </div>
-      <div className="map-actions">
-        {fogActive && (
+      {plannerOpen && !fogActive && (
+        <div className="planner-popup-backdrop">
           <button
-            className="explore-button active"
             type="button"
-            aria-pressed
-            aria-label="Exit exploration fog view"
-            onClick={() => setFogActive(false)}
+            className="planner-popup-scrim"
+            aria-label="Close planner"
+            onClick={closePlanner}
+          />
+          <dialog
+            className="planner-popup"
+            open
+            aria-label="Wander planner"
           >
-            <X size={18} />
-            <span>Exit fog</span>
-          </button>
-        )}
-      </div>
+            <button type="button" className="planner-popup-close" aria-label="Close planner" onClick={closePlanner}>
+              <X size={17} />
+            </button>
+            <div className="planner-popup-stack">
+              <section className="planner" aria-label="Wander planner">
+                <StartSearch
+                  value={startQuery}
+                  onQueryChange={(query) => {
+                    setStartQuery(query);
+                    if (!query.trim()) {
+                      clearToVictoriaSquare(true);
+                      setLocationStatus("idle");
+                    }
+                  }}
+                  onSelect={(suggestion) => applyStart(suggestion, { fromUser: true })}
+                  onUseMyLocation={useMyLocation}
+                  locating={locationStatus === "locating"}
+                  statusNote={null}
+                />
+                <fieldset className="mode-switch" aria-label="Route mode">
+                  <button className={mode === "discover" ? "active" : ""} onClick={() => setMode("discover")} type="button"><Leaf size={18} /> Discover</button>
+                  <button className={mode === "heat" ? "active heat" : ""} onClick={() => setMode("heat")} type="button"><Sun size={18} /> Beat the heat</button>
+                </fieldset>
+
+                <div className="time-block">
+                  <span className="field-label">Time to wander</span>
+                  <fieldset className="time-boxes">
+                    <legend className="sr-only">Hours and minutes to wander</legend>
+                    <label className="time-box">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={3}
+                        value={wanderHours}
+                        aria-label="Hours"
+                        onChange={(event) => {
+                          const raw = event.target.value;
+                          if (raw === "") {
+                            setWanderHours(0);
+                            return;
+                          }
+                          const next = Number(raw);
+                          setWanderHours(Number.isFinite(next) ? Math.max(0, Math.min(3, Math.trunc(next))) : 0);
+                        }}
+                      />
+                      <span>hours</span>
+                    </label>
+                    <MinuteRuler value={wanderMinutes} onChange={setWanderMinutes} />
+                  </fieldset>
+                </div>
+
+                <div className="interest-block"><span className="field-label">Make it more you</span><div className="chips">
+                  {interests.map(({ id, label, icon: Icon }) => (
+                    <button key={id} type="button" aria-pressed={selected.includes(id)} className={selected.includes(id) ? "selected" : ""} onClick={() => toggleInterest(id)}><Icon size={15} /> {label}</button>
+                  ))}
+                </div></div>
+
+                <button className="generate" type="button" disabled={generating || totalMinutes < 1} onClick={() => applyPlan()}>
+                  <span>{generating ? "Drawing loop…" : "Find my wander"}</span>
+                  <span aria-hidden="true">{generating ? "…" : "→"}</span>
+                </button>
+              </section>
+
+              <AboutRoute
+                route={route}
+                routeCopy={routeCopy}
+                empty={!hasRoute}
+                open={aboutOpen}
+                onToggle={() => setAboutOpen((current) => !current)}
+              />
+            </div>
+          </dialog>
+        </div>
+      )}
+
       {heatEscapeOpen && heatEscape && !fogActive && (
         <div className="heat-escape-backdrop">
           <button
