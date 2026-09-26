@@ -220,7 +220,7 @@ export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: Ex
       ) : null}
       {checkinQuest ? (
         <PhotoCheckinDialog
-          eventId={`daily:${checkinQuest.id}`}
+          eventId={checkinQuest.id}
           placeName={checkinQuest.place.name}
           placePosition={checkinQuest.place.position}
           points={checkinQuest.points}

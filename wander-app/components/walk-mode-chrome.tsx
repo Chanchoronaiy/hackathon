@@ -1,15 +1,13 @@
 "use client";
 
-import { ArrowLeft, Camera, Check, CornerUpRight, Share } from "lucide-react";
+import { ArrowLeft, Check, CornerUpRight, Share } from "lucide-react";
 import type { WanderRoute } from "@/lib/route-planner";
 
 type WalkModeChromeProps = {
   route: WanderRoute;
   currentStopIndex: number;
-  explorationPercent: number;
   onBack: () => void;
   onShare: () => void;
-  onCapture: () => void;
   onAdvance?: () => void;
 };
 
@@ -37,10 +35,8 @@ function walkPercent(route: WanderRoute, currentStopIndex: number) {
 export default function WalkModeChrome({
   route,
   currentStopIndex,
-  explorationPercent,
   onBack,
   onShare,
-  onCapture,
   onAdvance,
 }: WalkModeChromeProps) {
   const totalStops = route.stops.length;
@@ -50,7 +46,6 @@ export default function WalkModeChrome({
   const minsLeft = remainingMinutes(route, currentStopIndex);
   const kmLeft = remainingKm(route, currentStopIndex);
   const progress = walkPercent(route, currentStopIndex);
-  const exploredShown = Math.max(progress, Math.round(explorationPercent));
 
   return (
     <>
@@ -60,11 +55,7 @@ export default function WalkModeChrome({
         </button>
         <div className="walk-status" aria-live="polite">
           <strong>{done ? "Walk complete" : minsLeft > 0 ? `${minsLeft} min left` : "Almost there"}</strong>
-          <span>
-            {done
-              ? `${route.distanceKm.toFixed(1)} km · ${exploredShown}% explored`
-              : `${kmLeft.toFixed(1)} km · ${exploredShown}% explored`}
-          </span>
+          <span>{done ? `${route.distanceKm.toFixed(1)} km` : `${kmLeft.toFixed(1)} km left`}</span>
         </div>
         <button type="button" className="walk-round" aria-label="Share wander" onClick={onShare}>
           <Share size={18} strokeWidth={2.2} />
@@ -73,15 +64,10 @@ export default function WalkModeChrome({
 
       <div className="walk-progress-row" aria-label={`${progress}% walked`}>
         <div className="walk-progress" aria-hidden="true">
-          <span style={{ width: `${progress}%` }} />
+          <span style={{ width: `${Math.max(progress, progress > 0 ? 2 : 0)}%` }} />
         </div>
         <strong className="walk-progress-pct">{progress}%</strong>
       </div>
-
-      <button type="button" className="walk-capture" onClick={onCapture}>
-        <Camera size={22} strokeWidth={2.2} aria-hidden="true" />
-        <span>Capture</span>
-      </button>
 
       {nextStop ? (
         <aside className="walk-next-card">
@@ -108,14 +94,8 @@ export default function WalkModeChrome({
           <div className="walk-next-row is-done">
             <div className="walk-next-copy">
               <strong>You’re back near the start</strong>
-              <p>Capture a last moment, or end the walk.</p>
+              <p>End the walk whenever you’re ready.</p>
             </div>
-          </div>
-          <div className="walk-done-actions">
-            <button type="button" className="walk-done-capture" onClick={onCapture}>
-              <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
-              Capture
-            </button>
             <button type="button" className="walk-done-end" onClick={onBack}>
               <Check size={18} strokeWidth={2.4} aria-hidden="true" />
               End walk

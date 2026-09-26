@@ -18,6 +18,7 @@ import type { DailyQuest } from "@/lib/gamification";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
+import { loadCloudTrials, removeCloudTrial, syncSavedTrial } from "@/lib/cloud-data";
 import { fetchAdelaideWeather, type WeatherSnapshot } from "@/lib/weather";
 
 const WanderMap = dynamic(() => import("@/components/wander-map"), {
@@ -312,6 +313,9 @@ export default function Home() {
       setExploredIds(readExploredIds());
       setExploredTrail(readExploredTrail());
       setSavedTrials(readSavedTrials());
+      void loadCloudTrials().then((cloudTrials) => {
+        if (cloudTrials?.length) setSavedTrials(cloudTrials);
+      });
     });
     return () => cancelAnimationFrame(frame);
   }, []);
@@ -502,6 +506,13 @@ export default function Home() {
       title: route.title,
     });
     setSavedTrials(next);
+    const localTrial = next[0];
+    if (localTrial) {
+      void syncSavedTrial(localTrial).then((cloudTrial) => {
+        if (!cloudTrial) return;
+        setSavedTrials((current) => [cloudTrial, ...current.filter((trial) => trial.id !== localTrial.id)]);
+      });
+    }
     openSavedScreen(null);
   }, [activePlan, hasRoute, openSavedScreen, route.distanceKm, route.stops, route.title, route.walkingMinutes]);
 
@@ -608,16 +619,6 @@ export default function Home() {
       return;
     }
     void navigator.clipboard?.writeText(text).catch(() => undefined);
-  }
-
-  function captureWalkMoment() {
-    const stop = route.stops[Math.min(walkStopIndex, Math.max(route.stops.length - 1, 0))];
-    if (stop) handleExploreStop(stop.id);
-    if (walkStopIndex >= route.stops.length) {
-      openMemoriesScreen();
-      endWalk();
-      return;
-    }
   }
 
   function goHomeTab(tab: typeof homeTab) {
@@ -832,7 +833,11 @@ export default function Home() {
           trials={savedTrials}
           note={saveNote}
           onOpenTrial={restoreTrial}
-          onRemoveTrial={(id) => setSavedTrials(deleteSavedTrial(id))}
+          onRemoveTrial={(id) => {
+            deleteSavedTrial(id);
+            setSavedTrials((current) => current.filter((trial) => trial.id !== id));
+            void removeCloudTrial(id);
+          }}
         />
       )}
 
@@ -952,10 +957,8 @@ export default function Home() {
         <WalkModeChrome
           route={route}
           currentStopIndex={walkStopIndex}
-          explorationPercent={explorationPercent}
           onBack={endWalk}
           onShare={shareWalk}
-          onCapture={captureWalkMoment}
           onAdvance={() => {
             const stop = route.stops[walkStopIndex];
             if (stop) handleExploreStop(stop.id);

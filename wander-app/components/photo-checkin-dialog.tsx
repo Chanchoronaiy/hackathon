@@ -4,6 +4,7 @@ import { Camera, CheckCircle2, MapPin, X } from "lucide-react";
 import { useState } from "react";
 import { distanceMetres } from "@/lib/exploration";
 import { awardPoints } from "@/lib/gamification";
+import { submitCloudCheckin } from "@/lib/cloud-data";
 import type { LatLng } from "@/lib/route-planner";
 
 export default function PhotoCheckinDialog({
@@ -37,9 +38,18 @@ export default function PhotoCheckinDialog({
           setStatus("too-far");
           return;
         }
-        const profile = awardPoints(eventId, points);
+        const profile = awardPoints(eventId, points, false);
         setStatus("verified");
         onVerified(profile.points);
+        void submitCloudCheckin({
+          eventKey: eventId,
+          placeId: eventId.split(":").at(-1) || eventId,
+          placeName,
+          placePosition,
+          currentPosition: current,
+          points,
+          photo,
+        }).catch(() => undefined);
       },
       () => setStatus("location-error"),
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 15_000 },

@@ -108,7 +108,7 @@ export default function DailyQuestsScreen({
       ) : null}
       {checkinQuest ? (
         <PhotoCheckinDialog
-          eventId={`daily:${checkinQuest.id}`}
+          eventId={checkinQuest.id}
           placeName={checkinQuest.place.name}
           placePosition={checkinQuest.place.position}
           points={checkinQuest.points}

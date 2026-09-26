@@ -39,8 +39,8 @@ function CreamWash() {
       bounds={[[-85, -180], [85, 180]]}
       pathOptions={{
         stroke: false,
-        fillColor: "#fff9d6",
-        fillOpacity: 0.22,
+        fillColor: "#f4efe6",
+        fillOpacity: 0.28,
         interactive: false,
         pane: "wander-cream",
       }}
@@ -149,7 +149,7 @@ function StopMarker({
       radius={explored ? 9 : 8}
       pathOptions={{
         color: "#0f1210",
-        fillColor: explored ? "#fff9d6" : colour,
+        fillColor: explored ? "#f7f3ea" : colour,
         fillOpacity: 1,
         weight: 3,
         opacity: 0.95,
@@ -192,7 +192,7 @@ export default function WanderMap({
   onExploreStop: (id: string) => void;
   onExplorationPercent: (percent: number) => void;
 }) {
-  const colour = walkMode ? "#d8a2a2" : mode === "discover" ? "#8ea66b" : "#ffe08a";
+  const colour = walkMode ? "#e07045" : mode === "discover" ? "#d8ff64" : "#ffe08a";
   const start = route.start;
   const explored = useMemo(() => new Set(exploredIds), [exploredIds]);
   const [clearings, setClearings] = useState<Clearing[]>([]);
@@ -229,7 +229,7 @@ export default function WanderMap({
           />
           {showRoute && (
             <>
-              <Polyline positions={route.geometry} pathOptions={{ color: walkMode ? "#b07f7f" : "#0b0e0c", weight: walkMode ? 10 : 12, opacity: fogActive ? .4 : .88, lineCap: "round", lineJoin: "round" }} />
+              <Polyline positions={route.geometry} pathOptions={{ color: walkMode ? "#c45a30" : "#0b0e0c", weight: walkMode ? 10 : 12, opacity: fogActive ? .4 : .88, lineCap: "round", lineJoin: "round" }} />
               <Polyline positions={route.geometry} pathOptions={{ color: colour, weight: walkMode ? 6 : 7, opacity: fogActive ? .6 : 1, lineCap: "round", lineJoin: "round" }} />
               {walkMode ? (
                 <>

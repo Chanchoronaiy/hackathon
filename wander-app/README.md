@@ -30,6 +30,21 @@ Open [http://localhost:3000](http://localhost:3000).
 
 Optional walking geometry: copy `.env.example` to `.env.local` and set `OPENROUTESERVICE_API_KEY`. The key is read only by `/api/directions` and never sent to the browser. Without it, Wander keeps the local grid fallback.
 
+## Supabase persistence
+
+Wander continues to work from local browser storage when Supabase is not configured. To turn on shared profiles, saved routes, check-in photos, points and the global leaderboard:
+
+1. Create a Supabase project and enable **Anonymous Sign-Ins** under Authentication → Providers.
+2. Run `supabase/migrations/001_wander.sql` in the Supabase SQL editor.
+3. Copy the project URL and publishable/anon key into `.env.local`:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_PUBLISHABLE_OR_ANON_KEY
+```
+
+Never place the service-role or secret key in `.env.local` or browser code. Restart the development server after changing environment variables.
+
 ## Validate
 
 ```bash

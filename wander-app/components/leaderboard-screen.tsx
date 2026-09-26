@@ -7,6 +7,7 @@ import {
   demoGlobalLeaderboard,
   readGamificationProfile,
 } from "@/lib/gamification";
+import { loadCloudLeaderboard } from "@/lib/cloud-data";
 
 type LeaderboardScreenProps = {
   onClose?: () => void;
@@ -15,6 +16,7 @@ type LeaderboardScreenProps = {
 export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
   const [tab, setTab] = useState<"friends" | "global">("friends");
   const [points, setPoints] = useState(() => readGamificationProfile().points);
+  const [cloudEntries, setCloudEntries] = useState<Awaited<ReturnType<typeof loadCloudLeaderboard>>>(null);
 
   useEffect(() => {
     const update = () => setPoints(readGamificationProfile().points);
@@ -22,9 +24,17 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
     return () => window.removeEventListener("wander:points", update);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void loadCloudLeaderboard().then((entries) => {
+      if (!cancelled && entries?.length) setCloudEntries(entries);
+    });
+    return () => { cancelled = true; };
+  }, [points]);
+
   const entries = useMemo(
-    () => (tab === "friends" ? demoFriendsLeaderboard(points) : demoGlobalLeaderboard(points)),
-    [points, tab],
+    () => (tab === "friends" ? demoFriendsLeaderboard(points) : cloudEntries ?? demoGlobalLeaderboard(points)),
+    [cloudEntries, points, tab],
   );
   const yourRank = entries.findIndex((entry) => entry.id === "you") + 1;
 

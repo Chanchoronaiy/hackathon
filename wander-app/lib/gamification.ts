@@ -76,10 +76,11 @@ export function readGamificationProfile(): GamificationProfile {
 }
 
 export function isQuestCompleted(questId: string, profile = readGamificationProfile()) {
-  return profile.completedEventIds.includes(questId);
+  return profile.completedEventIds.includes(questId)
+    || profile.completedEventIds.includes(`daily:${questId}`);
 }
 
-export function awardPoints(eventId: string, points: number): GamificationProfile {
+export function awardPoints(eventId: string, points: number, syncCloud = true): GamificationProfile {
   const current = readGamificationProfile();
   if (current.completedEventIds.includes(eventId)) return current;
   const next = {
@@ -89,6 +90,17 @@ export function awardPoints(eventId: string, points: number): GamificationProfil
   if (typeof window !== "undefined") {
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify(next));
     window.dispatchEvent(new CustomEvent("wander:points", { detail: next }));
+    if (syncCloud) {
+      void import("@/lib/cloud-data")
+        .then(({ syncPointsEvent }) => syncPointsEvent(eventId, points, "Wander activity"))
+        .then((cloudPoints) => {
+          if (typeof cloudPoints !== "number") return;
+          const synced = { ...readGamificationProfile(), points: cloudPoints };
+          window.localStorage.setItem(PROFILE_KEY, JSON.stringify(synced));
+          window.dispatchEvent(new CustomEvent("wander:points", { detail: synced }));
+        })
+        .catch(() => undefined);
+    }
   }
   return next;
 }

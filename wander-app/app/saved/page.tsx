@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState } from "react";
 import SavedScreen from "@/components/saved-screen";
 import { deleteSavedTrial, readSavedTrials, type SavedTrial } from "@/lib/saved-trials";
+import { loadCloudTrials, removeCloudTrial } from "@/lib/cloud-data";
 
 const SAVED_EVENT = "wander-saved-updated";
 
@@ -16,19 +17,23 @@ function subscribe(onStoreChange: () => void) {
   };
 }
 
-function getSnapshot() {
-  return readSavedTrials();
-}
-
-function getServerSnapshot(): SavedTrial[] {
-  return [];
-}
-
 export default function SavedTrialsPage() {
-  const trials = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const [trials, setTrials] = useState<SavedTrial[]>([]);
+
+  useEffect(() => {
+    const update = () => setTrials(readSavedTrials());
+    update();
+    const unsubscribe = subscribe(update);
+    void loadCloudTrials().then((cloudTrials) => {
+      if (cloudTrials?.length) setTrials(cloudTrials);
+    });
+    return unsubscribe;
+  }, []);
 
   const removeTrial = useCallback((id: string) => {
     deleteSavedTrial(id);
+    setTrials((current) => current.filter((trial) => trial.id !== id));
+    void removeCloudTrial(id);
     window.dispatchEvent(new Event(SAVED_EVENT));
   }, []);
 
