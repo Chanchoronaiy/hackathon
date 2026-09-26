@@ -28,19 +28,12 @@ export default function StreetViewDialog({
   return (
     <div className="streetview-backdrop" role="presentation">
       <button type="button" className="streetview-scrim" aria-label="Close Street View" onClick={onClose} />
-      <section className="streetview-card" role="dialog" aria-modal="true" aria-labelledby="streetview-title">
-        <header>
-          <div>
-            <span>Preview the quest</span>
-            <h2 id="streetview-title">{name}</h2>
-          </div>
-          <button type="button" aria-label="Close Street View" onClick={onClose}><X size={19} /></button>
-        </header>
+      <section className="streetview-card" role="dialog" aria-modal="true" aria-label={`Street View of ${name}`}>
+        <button className={styles.close} type="button" aria-label="Close Street View" onClick={onClose}><X size={20} /></button>
         {source ? (
           <div className={styles.frameWrap}>
             {!loaded && (
               <div className={styles.loading} aria-live="polite">
-                <span className={styles.buddy} aria-hidden="true">👋</span>
                 <LoaderCircle size={22} className={styles.spinner} aria-hidden="true" />
                 <strong>Looking around…</strong>
                 <p>Loading the view from this point.</p>
