@@ -239,6 +239,7 @@ export default function WanderMap({
   const start = route.start;
   const explored = useMemo(() => new Set(exploredIds), [exploredIds]);
   const [clearings, setClearings] = useState<Clearing[]>([]);
+  const [baseMapStyle, setBaseMapStyle] = useState<"calm" | "detailed">("calm");
   const [streetViewBuddyPosition, setStreetViewBuddyPosition] = useState<LatLng | null>(null);
   const exploredPositions = useMemo(() => [
     ...exploredPositionsFor(exploredIds),
@@ -259,10 +260,20 @@ export default function WanderMap({
     <>
       <div className={`map-stage${fogActive ? " fog-active" : ""}${walkMode ? " walk-mode" : ""}${questPins.length ? " quest-mode" : ""}`} aria-label="Interactive map of central Adelaide">
         <MapContainer center={start.position} zoom={15} zoomControl={false} className="leaflet-map">
-          <TileLayer
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            attribution="© OpenStreetMap contributors"
-          />
+          {baseMapStyle === "calm" ? (
+            <TileLayer
+              key="calm-map"
+              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+              subdomains="abcd"
+              attribution="© OpenStreetMap contributors · © CARTO"
+            />
+          ) : (
+            <TileLayer
+              key="detailed-map"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution="© OpenStreetMap contributors"
+            />
+          )}
           <CreamWash />
           {!questPins.length ? (
             <Recenter position={walkMode ? youAreHere : start.position} zoom={walkMode ? 16 : undefined} />
@@ -375,6 +386,17 @@ export default function WanderMap({
             </>
           )}
         </MapContainer>
+        {!walkMode && (
+          <button
+            type="button"
+            className="map-style-toggle"
+            onClick={() => setBaseMapStyle((current) => current === "calm" ? "detailed" : "calm")}
+            aria-label={`Switch to ${baseMapStyle === "calm" ? "detailed" : "calm"} map background`}
+          >
+            <span aria-hidden="true">{baseMapStyle === "calm" ? "◫" : "◎"}</span>
+            {baseMapStyle === "calm" ? "Calm map" : "Detailed map"}
+          </button>
+        )}
         {!walkMode && (
           <div className="map-caption">
             Adelaide CBD · POIs cached {POI_DATA_TIMESTAMP}
