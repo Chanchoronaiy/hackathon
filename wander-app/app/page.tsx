@@ -152,6 +152,7 @@ export default function Home() {
     distanceKm?: number;
     walkingMinutes?: number;
   } | null>(null);
+  const [readyRouteKey, setReadyRouteKey] = useState<string | null>(null);
   const [fogActive, setFogActive] = useState(false);
   const [friendsFogView, setFriendsFogView] = useState(false);
   const [explorationPercent, setExplorationPercent] = useState(0);
@@ -388,9 +389,13 @@ export default function Home() {
       planned.start.position,
     ];
     let cancelled = false;
+    setReadyRouteKey(null);
     void resolveLoopGeometry(waypoints).then(({ geometry, distanceKm, walkingMinutes, source }) => {
-      if (cancelled || source === "grid") return;
-      setOrsOverride({ key: loopKey, geometry, distanceKm, walkingMinutes });
+      if (cancelled) return;
+      if (source === "openrouteservice") {
+        setOrsOverride({ key: loopKey, geometry, distanceKm, walkingMinutes });
+      }
+      setReadyRouteKey(loopKey);
     });
     return () => { cancelled = true; };
   }, [hasRoute, loopKey, planned.start.position, planned.stops]);
@@ -884,7 +889,7 @@ export default function Home() {
         exploredIds={exploredIds}
         exploredTrail={exploredTrail}
         fogActive={fogActive}
-        showRoute={hasRoute}
+        showRoute={hasRoute && readyRouteKey === loopKey}
         walkMode={walkingActive}
         walkStopIndex={walkStopIndex}
         walkPosition={walkPosition}
