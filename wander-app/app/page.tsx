@@ -356,6 +356,15 @@ export default function Home() {
   }, [hasRoute, loopKey, planned.start.position, planned.stops]);
 
   useEffect(() => {
+    if (!plannerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPlannerOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [plannerOpen]);
+
+  useEffect(() => {
     if (!document.modelContext) return;
     const lifecycle = new AbortController();
     void Promise.resolve(document.modelContext.registerTool({
@@ -688,7 +697,7 @@ export default function Home() {
       {showHomeDock && (
         <div className={`home-dock${tabScreenOpen ? " is-saved" : ""}`}>
           {!tabScreenOpen && (
-            <button className="start-wander" type="button" onClick={openPlanner}>
+            <button className={`start-wander${displayMode === "heat" ? " is-heat" : ""}`} type="button" onClick={openPlanner}>
               <span>Start wandering</span>
             </button>
           )}
@@ -784,13 +793,11 @@ export default function Home() {
             open
             aria-label="Wander planner"
           >
-            <div className="planner-popup-top">
-              <button type="button" className="wander-sheet-close planner-popup-close" aria-label="Close planner" onClick={closePlanner}>
-                <X size={20} strokeWidth={2.4} />
-              </button>
-            </div>
+            <button type="button" className="planner-popup-close" aria-label="Close planner" onClick={closePlanner}>
+              <X size={24} strokeWidth={2.4} />
+            </button>
             <div className="planner-popup-stack">
-              <section className="planner" aria-label="Wander planner">
+              <section className={`planner${mode === "heat" ? " is-heat" : ""}`} aria-label="Wander planner">
                 <StartSearch
                   value={startQuery}
                   onQueryChange={(query) => {
@@ -863,7 +870,7 @@ export default function Home() {
                   </button>
                 </div>
 
-                <button className="generate" type="button" disabled={generating || totalMinutes < 1} onClick={() => applyPlan()}>
+                <button className={`generate${mode === "heat" ? " is-heat" : ""}`} type="button" disabled={generating || totalMinutes < 1} onClick={() => applyPlan()}>
                   <span>{generating ? "Drawing loop…" : "Generate my Wander"}</span>
                   <span aria-hidden="true">{generating ? "…" : "→"}</span>
                 </button>

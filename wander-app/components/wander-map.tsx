@@ -94,12 +94,10 @@ function boundsFromMap(map: ReturnType<typeof useMap>): MapBounds {
 
 function FogSync({
   positions,
-  fogActive,
   onClearings,
   onPercent,
 }: {
   positions: Array<{ id: string; position: LatLng }>;
-  fogActive: boolean;
   onClearings: (clearings: Clearing[]) => void;
   onPercent: (percent: number) => void;
 }) {
@@ -109,25 +107,25 @@ function FogSync({
   useMapEvents({
     moveend() {
       onClearings(projectClearings(map, positions));
-      if (fogActive) onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
+      onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     },
     zoomend() {
       onClearings(projectClearings(map, positions));
-      if (fogActive) onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
+      onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     },
     resize() {
       onClearings(projectClearings(map, positions));
-      if (fogActive) onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
+      onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     },
   });
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       onClearings(projectClearings(map, positions));
-      if (fogActive) onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
+      onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     });
     return () => cancelAnimationFrame(frame);
-  }, [map, fogActive, onClearings, onPercent, positionKey, positions]);
+  }, [map, onClearings, onPercent, positionKey, positions]);
 
   return null;
 }
@@ -223,7 +221,6 @@ export default function WanderMap({
           <FitRoute geometry={route.geometry} enabled={showRoute && !fogActive && !walkMode} />
           <FogSync
             positions={exploredPositions}
-            fogActive={fogActive || walkMode}
             onClearings={setClearings}
             onPercent={onExplorationPercent}
           />
@@ -317,7 +314,7 @@ export default function WanderMap({
               </g>
             </mask>
           </defs>
-          <rect width="100%" height="100%" fill="#dcdbdf" fillOpacity={0.67} mask="url(#wander-fog-mask)" />
+          <rect width="100%" height="100%" fill="#a6a5ad" fillOpacity={0.72} mask="url(#wander-fog-mask)" />
         </svg>
       )}
     </>
