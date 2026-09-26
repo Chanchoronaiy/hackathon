@@ -1,7 +1,10 @@
 "use client";
 
-import { ChevronRight, Coffee, MapPin, Search, Star } from "lucide-react";
+import { Camera, ChevronRight, Coffee, Eye, MapPin, Search, Sparkles, Star } from "lucide-react";
 import { useMemo, useState } from "react";
+import PhotoCheckinDialog from "@/components/photo-checkin-dialog";
+import StreetViewDialog from "@/components/street-view-dialog";
+import { dailyQuests, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
 
 export type ExploreSuggestion = {
   id: string;
@@ -65,6 +68,10 @@ type ExploreScreenProps = {
 export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: ExploreScreenProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("For you");
+  const [streetViewQuest, setStreetViewQuest] = useState<DailyQuest | null>(null);
+  const [checkinQuest, setCheckinQuest] = useState<DailyQuest | null>(null);
+  const [points, setPoints] = useState(() => readGamificationProfile().points);
+  const quests = useMemo(() => dailyQuests(), []);
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -109,6 +116,29 @@ export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: Ex
           >
             {item}
           </button>
+        ))}
+      </div>
+
+      <div className="explore-section-head daily-quest-head">
+        <div>
+          <span><Sparkles size={14} /> Refreshes daily</span>
+          <h2>Today’s five quests</h2>
+        </div>
+        <strong>{points.toLocaleString()} pts</strong>
+      </div>
+
+      <div className="daily-quest-scroller">
+        {quests.map((quest, index) => (
+          <article className="daily-quest-card" key={quest.id}>
+            <span className="daily-quest-number">0{index + 1}</span>
+            <span className="daily-quest-bonus">+{quest.points}</span>
+            <h3>{quest.place.name}</h3>
+            <p>{quest.place.reason}</p>
+            <div>
+              <button type="button" onClick={() => setStreetViewQuest(quest)}><Eye size={15} /> Street View</button>
+              <button type="button" onClick={() => setCheckinQuest(quest)}><Camera size={15} /> Check in</button>
+            </div>
+          </article>
         ))}
       </div>
 
@@ -180,6 +210,24 @@ export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: Ex
           <ChevronRight size={18} aria-hidden="true" />
         </button>
       </div>
+
+      {streetViewQuest ? (
+        <StreetViewDialog
+          name={streetViewQuest.place.name}
+          position={streetViewQuest.place.position}
+          onClose={() => setStreetViewQuest(null)}
+        />
+      ) : null}
+      {checkinQuest ? (
+        <PhotoCheckinDialog
+          eventId={`daily:${checkinQuest.id}`}
+          placeName={checkinQuest.place.name}
+          placePosition={checkinQuest.place.position}
+          points={checkinQuest.points}
+          onClose={() => setCheckinQuest(null)}
+          onVerified={setPoints}
+        />
+      ) : null}
     </section>
   );
 }

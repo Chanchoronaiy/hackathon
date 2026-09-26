@@ -1,7 +1,8 @@
 "use client";
 
-import { ChevronRight, Plus, UserPlus } from "lucide-react";
-import { useState } from "react";
+import { ChevronRight, Plus, Trophy, UserPlus } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { demoFriendsLeaderboard, readGamificationProfile } from "@/lib/gamification";
 
 const CIRCLE = [
   { id: "sam", initials: "SP", name: "Sam P.", detail: "2 shared memories", percent: "31%", tone: "peach" },
@@ -19,6 +20,7 @@ type FriendsScreenProps = {
 };
 
 export default function FriendsScreen({ onAddFriend }: FriendsScreenProps) {
+  const [points, setPoints] = useState(() => readGamificationProfile().points);
   const [pending, setPending] = useState({
     id: "tom",
     initials: "TR",
@@ -26,6 +28,12 @@ export default function FriendsScreen({ onAddFriend }: FriendsScreenProps) {
     detail: "3 mutual friends",
     visible: true,
   });
+  useEffect(() => {
+    const update = () => setPoints(readGamificationProfile().points);
+    window.addEventListener("wander:points", update);
+    return () => window.removeEventListener("wander:points", update);
+  }, []);
+  const leaderboard = useMemo(() => demoFriendsLeaderboard(points), [points]);
 
   return (
     <section className="friends-screen" aria-labelledby="friends-screen-title">
@@ -64,6 +72,21 @@ export default function FriendsScreen({ onAddFriend }: FriendsScreenProps) {
         </span>
         <ChevronRight size={18} aria-hidden="true" />
       </button>
+
+      <div className="friends-section-title leaderboard-title">
+        <span>Weekly leaderboard</span>
+        <Trophy size={17} aria-hidden="true" />
+      </div>
+      <ol className="leaderboard-list">
+        {leaderboard.map((person, index) => (
+          <li key={person.id} className={person.id === "you" ? "is-you" : ""}>
+            <span className="leaderboard-rank">{index + 1}</span>
+            <span className="friends-avatar is-mint" aria-hidden="true">{person.initials}</span>
+            <strong>{person.name}</strong>
+            <span>{person.points.toLocaleString()} pts</span>
+          </li>
+        ))}
+      </ol>
 
       {pending.visible ? (
         <>

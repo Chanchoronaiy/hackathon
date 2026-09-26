@@ -1,10 +1,12 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ArrowLeft, Bookmark, CalendarDays, Camera, Cloud, Coffee, Compass, Leaf, Map, Palette, Sun, Trees, Users, X } from "lucide-react";
+import { ArrowLeft, Bookmark, CalendarDays, Camera, Cloud, Coffee, Compass, Leaf, Map, MapPinned, Palette, Sun, Trees, Trophy, Users, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import DailyQuestsScreen from "@/components/daily-quests-screen";
 import ExploreScreen, { type ExploreSuggestion } from "@/components/explore-screen";
 import FriendsScreen from "@/components/friends-screen";
+import LeaderboardScreen from "@/components/leaderboard-screen";
 import MemoriesScreen from "@/components/memories-screen";
 import SavedScreen from "@/components/saved-screen";
 import WalkModeChrome from "@/components/walk-mode-chrome";
@@ -12,6 +14,7 @@ import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
+import type { DailyQuest } from "@/lib/gamification";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
@@ -155,6 +158,8 @@ export default function Home() {
   const [exploreOpen, setExploreOpen] = useState(false);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
+  const [questsOpen, setQuestsOpen] = useState(false);
+  const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [savedTrials, setSavedTrials] = useState<SavedTrial[]>([]);
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
@@ -392,6 +397,8 @@ export default function Home() {
     setExploreOpen(false);
     setMemoriesOpen(false);
     setFriendsOpen(false);
+    setQuestsOpen(false);
+    setLeaderboardOpen(false);
   }, []);
 
   const openSavedScreen = useCallback((note?: string | null) => {
@@ -434,6 +441,32 @@ export default function Home() {
     setFogActive(false);
     setHeatEscapeOpen(false);
   }, [closeOverlayScreens]);
+
+  const openQuestsScreen = useCallback(() => {
+    closeOverlayScreens();
+    setQuestsOpen(true);
+    setWanderSheetOpen(false);
+    setPlannerOpen(false);
+    setFogActive(false);
+    setHeatEscapeOpen(false);
+    setWalkingActive(false);
+  }, [closeOverlayScreens]);
+
+  const openLeaderboardScreen = useCallback(() => {
+    closeOverlayScreens();
+    setLeaderboardOpen(true);
+    setWanderSheetOpen(false);
+    setPlannerOpen(false);
+    setFogActive(false);
+    setHeatEscapeOpen(false);
+    setWalkingActive(false);
+  }, [closeOverlayScreens]);
+
+  const goToDailyQuest = useCallback((quest: DailyQuest) => {
+    applyStart({ label: quest.place.name, position: quest.place.position }, { fromUser: true });
+    setQuestsOpen(false);
+    setHomeTab("map");
+  }, [applyStart]);
 
   const openExploreSuggestion = useCallback((suggestion: ExploreSuggestion) => {
     const nextMinutes = Math.max(5, Math.min(180, suggestion.minutes));
@@ -515,9 +548,9 @@ export default function Home() {
     plannerOpen ? "planner-open" : "home-view",
   ].join(" ");
 
-  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen;
-  const showHomeDock = !plannerOpen && !wanderSheetOpen && !walkingActive;
-  const tabScreenOpen = savedOpen || exploreOpen || memoriesOpen || friendsOpen;
+  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen && !questsOpen && !leaderboardOpen;
+  const showHomeDock = !plannerOpen && !wanderSheetOpen && !walkingActive && !questsOpen && !leaderboardOpen;
+  const tabScreenOpen = savedOpen || exploreOpen || memoriesOpen || friendsOpen || questsOpen || leaderboardOpen;
 
   function toggleFog() {
     if (fogActive) {
@@ -676,6 +709,26 @@ export default function Home() {
               <Cloud size={18} strokeWidth={2.2} />
               <span>{fogActive ? "On" : "Off"}</span>
             </button>
+            <button
+              type="button"
+              className={`home-rail-chip${questsOpen ? " is-on" : ""}`}
+              aria-pressed={questsOpen}
+              aria-label="Open daily quests"
+              onClick={openQuestsScreen}
+            >
+              <MapPinned size={18} strokeWidth={2.2} />
+              <span>Quests</span>
+            </button>
+            <button
+              type="button"
+              className={`home-rail-chip${leaderboardOpen ? " is-on" : ""}`}
+              aria-pressed={leaderboardOpen}
+              aria-label="Open points leaderboard"
+              onClick={openLeaderboardScreen}
+            >
+              <Trophy size={18} strokeWidth={2.2} />
+              <span>Board</span>
+            </button>
           </aside>
 
           <div className="home-explore-pill" aria-live="polite">
@@ -760,6 +813,18 @@ export default function Home() {
 
       {friendsOpen && !fogActive && (
         <FriendsScreen />
+      )}
+
+      {questsOpen && !fogActive && (
+        <DailyQuestsScreen
+          onGoToQuest={goToDailyQuest}
+          onOpenLeaderboard={openLeaderboardScreen}
+          onClose={() => setQuestsOpen(false)}
+        />
+      )}
+
+      {leaderboardOpen && !fogActive && (
+        <LeaderboardScreen onClose={() => setLeaderboardOpen(false)} />
       )}
 
       {savedOpen && !fogActive && (
