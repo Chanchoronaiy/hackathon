@@ -1,10 +1,7 @@
 "use client";
 
-import { Camera, ChevronRight, Coffee, Eye, MapPin, Search, Sparkles, Star } from "lucide-react";
+import { ChevronRight, Coffee, MapPin, Search, Star } from "lucide-react";
 import { useMemo, useState } from "react";
-import PhotoCheckinDialog from "@/components/photo-checkin-dialog";
-import StreetViewDialog from "@/components/street-view-dialog";
-import { dailyQuests, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
 
 export type ExploreSuggestion = {
   id: string;
@@ -68,10 +65,6 @@ type ExploreScreenProps = {
 export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: ExploreScreenProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("For you");
-  const [streetViewQuest, setStreetViewQuest] = useState<DailyQuest | null>(null);
-  const [checkinQuest, setCheckinQuest] = useState<DailyQuest | null>(null);
-  const [points, setPoints] = useState(() => readGamificationProfile().points);
-  const quests = useMemo(() => dailyQuests(), []);
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -119,115 +112,78 @@ export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: Ex
         ))}
       </div>
 
-      <div className="explore-section-head daily-quest-head">
-        <div>
-          <span><Sparkles size={14} /> Refreshes daily</span>
-          <h2>Today’s five quests</h2>
+      <div className="explore-block">
+        <div className="explore-section-head">
+          <h2>Suggested near you</h2>
+          <button type="button" className="explore-see-all">See all</button>
         </div>
-        <strong>{points.toLocaleString()} pts</strong>
+
+        <div className="explore-suggest-scroller">
+          {suggestions.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className="explore-suggest-card"
+              aria-label={`Open ${item.title}`}
+              onClick={() => onOpenSuggestion(item)}
+            >
+              <span className={`explore-suggest-map is-${item.accent}`} aria-hidden="true" />
+              <span className="explore-suggest-body">
+                <span className="explore-suggest-rating">
+                  <Star size={13} fill="currentColor" aria-hidden="true" />
+                  {item.rating.toFixed(1)} ({item.reviews})
+                </span>
+                <strong>{item.title}</strong>
+                <span className="explore-suggest-meta">
+                  {item.distanceKm.toFixed(1)} km · {item.minutes} min
+                </span>
+                <span className="explore-suggest-tags">
+                  {item.tags.map((tag) => (
+                    <span key={tag}>{tag}</span>
+                  ))}
+                </span>
+              </span>
+            </button>
+          ))}
+          {suggestions.length === 0 ? (
+            <p className="explore-empty">No routes match that search.</p>
+          ) : null}
+        </div>
       </div>
 
-      <div className="daily-quest-scroller">
-        {quests.map((quest, index) => (
-          <article className="daily-quest-card" key={quest.id}>
-            <span className="daily-quest-number">0{index + 1}</span>
-            <span className="daily-quest-bonus">+{quest.points}</span>
-            <h3>{quest.place.name}</h3>
-            <p>{quest.place.reason}</p>
-            <div>
-              <button type="button" onClick={() => setStreetViewQuest(quest)}><Eye size={15} /> Street View</button>
-              <button type="button" onClick={() => setCheckinQuest(quest)}><Camera size={15} /> Check in</button>
-            </div>
-          </article>
-        ))}
-      </div>
+      <div className="explore-block">
+        <div className="explore-section-head">
+          <h2>Popular collections</h2>
+          <span className="explore-place">Adelaide</span>
+        </div>
 
-      <div className="explore-section-head">
-        <h2>Suggested near you</h2>
-        <button type="button" className="explore-see-all">See all</button>
-      </div>
-
-      <div className="explore-suggest-scroller">
-        {suggestions.map((item) => (
+        <div className="explore-collections">
           <button
-            key={item.id}
             type="button"
-            className="explore-suggest-card"
-            aria-label={`Open ${item.title}`}
-            onClick={() => onOpenSuggestion(item)}
+            className="explore-collection is-coffee"
+            onClick={() => onOpenCollection?.("coffee")}
           >
-            <span className={`explore-suggest-map is-${item.accent}`} aria-hidden="true" />
-            <span className="explore-suggest-body">
-              <span className="explore-suggest-rating">
-                <Star size={13} fill="currentColor" aria-hidden="true" />
-                {item.rating.toFixed(1)} ({item.reviews})
-              </span>
-              <strong>{item.title}</strong>
-              <span className="explore-suggest-meta">
-                {item.distanceKm.toFixed(1)} km · {item.minutes} min
-              </span>
-              <span className="explore-suggest-tags">
-                {item.tags.map((tag) => (
-                  <span key={tag}>{tag}</span>
-                ))}
-              </span>
+            <span className="explore-collection-icon" aria-hidden="true"><Coffee size={18} /></span>
+            <span className="explore-collection-copy">
+              <strong>Best laneway coffee</strong>
+              <span>7 routes · Curated by locals</span>
             </span>
+            <ChevronRight size={18} aria-hidden="true" />
           </button>
-        ))}
-        {suggestions.length === 0 ? (
-          <p className="explore-empty">No routes match that search.</p>
-        ) : null}
+          <button
+            type="button"
+            className="explore-collection is-heritage"
+            onClick={() => onOpenCollection?.("heritage")}
+          >
+            <span className="explore-collection-icon" aria-hidden="true"><MapPin size={18} /></span>
+            <span className="explore-collection-copy">
+              <strong>North Adelaide heritage</strong>
+              <span>5 routes · 112 saves</span>
+            </span>
+            <ChevronRight size={18} aria-hidden="true" />
+          </button>
+        </div>
       </div>
-
-      <div className="explore-section-head">
-        <h2>Popular collections</h2>
-        <span className="explore-place">Adelaide</span>
-      </div>
-
-      <div className="explore-collections">
-        <button
-          type="button"
-          className="explore-collection is-coffee"
-          onClick={() => onOpenCollection?.("coffee")}
-        >
-          <span className="explore-collection-icon" aria-hidden="true"><Coffee size={18} /></span>
-          <span className="explore-collection-copy">
-            <strong>Best laneway coffee</strong>
-            <span>7 routes · Curated by locals</span>
-          </span>
-          <ChevronRight size={18} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="explore-collection is-heritage"
-          onClick={() => onOpenCollection?.("heritage")}
-        >
-          <span className="explore-collection-icon" aria-hidden="true"><MapPin size={18} /></span>
-          <span className="explore-collection-copy">
-            <strong>North Adelaide heritage</strong>
-            <span>5 routes · 112 saves</span>
-          </span>
-          <ChevronRight size={18} aria-hidden="true" />
-        </button>
-      </div>
-
-      {streetViewQuest ? (
-        <StreetViewDialog
-          name={streetViewQuest.place.name}
-          position={streetViewQuest.place.position}
-          onClose={() => setStreetViewQuest(null)}
-        />
-      ) : null}
-      {checkinQuest ? (
-        <PhotoCheckinDialog
-          eventId={checkinQuest.id}
-          placeName={checkinQuest.place.name}
-          placePosition={checkinQuest.place.position}
-          points={checkinQuest.points}
-          onClose={() => setCheckinQuest(null)}
-          onVerified={setPoints}
-        />
-      ) : null}
     </section>
   );
 }

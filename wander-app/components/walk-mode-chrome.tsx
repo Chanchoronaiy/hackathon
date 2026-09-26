@@ -1,13 +1,13 @@
 "use client";
 
-import { ArrowLeft, Check, CornerUpRight, Share } from "lucide-react";
+import { ArrowLeft, Camera, Check, CornerUpRight } from "lucide-react";
 import type { WanderRoute } from "@/lib/route-planner";
 
 type WalkModeChromeProps = {
   route: WanderRoute;
   currentStopIndex: number;
   onBack: () => void;
-  onShare: () => void;
+  onCapture: () => void;
   onAdvance?: () => void;
 };
 
@@ -36,7 +36,7 @@ export default function WalkModeChrome({
   route,
   currentStopIndex,
   onBack,
-  onShare,
+  onCapture,
   onAdvance,
 }: WalkModeChromeProps) {
   const totalStops = route.stops.length;
@@ -54,12 +54,10 @@ export default function WalkModeChrome({
           <ArrowLeft size={20} strokeWidth={2.4} />
         </button>
         <div className="walk-status" aria-live="polite">
-          <strong>{done ? "Walk complete" : minsLeft > 0 ? `${minsLeft} min left` : "Almost there"}</strong>
+          <strong>{done ? "Nice wander" : minsLeft > 0 ? `${minsLeft} min left` : "Almost there"}</strong>
           <span>{done ? `${route.distanceKm.toFixed(1)} km` : `${kmLeft.toFixed(1)} km left`}</span>
         </div>
-        <button type="button" className="walk-round" aria-label="Share wander" onClick={onShare}>
-          <Share size={18} strokeWidth={2.2} />
-        </button>
+        <span className="walk-top-spacer" aria-hidden="true" />
       </div>
 
       <div className="walk-progress-row" aria-label={`${progress}% walked`}>
@@ -68,6 +66,10 @@ export default function WalkModeChrome({
         </div>
         <strong className="walk-progress-pct">{progress}%</strong>
       </div>
+
+      <button type="button" className="walk-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
+        <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
+      </button>
 
       {nextStop ? (
         <aside className="walk-next-card">
@@ -94,8 +96,14 @@ export default function WalkModeChrome({
           <div className="walk-next-row is-done">
             <div className="walk-next-copy">
               <strong>You’re back near the start</strong>
-              <p>End the walk whenever you’re ready.</p>
+              <p>Capture a last moment, or end the walk.</p>
             </div>
+          </div>
+          <div className="walk-done-actions">
+            <button type="button" className="walk-done-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
+              <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
+              Capture
+            </button>
             <button type="button" className="walk-done-end" onClick={onBack}>
               <Check size={18} strokeWidth={2.4} aria-hidden="true" />
               End walk

@@ -14,7 +14,7 @@ import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
-import type { DailyQuest } from "@/lib/gamification";
+import { dailyQuests, isQuestCompleted, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
@@ -162,6 +162,8 @@ export default function Home() {
   const [memoriesOpen, setMemoriesOpen] = useState(false);
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
+  const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null);
+  const [questPointsTick, setQuestPointsTick] = useState(0);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [savedTrials, setSavedTrials] = useState<SavedTrial[]>([]);
   const [saveNote, setSaveNote] = useState<string | null>(null);
@@ -320,6 +322,12 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    if (!plannerNotice) return;
+    const timer = window.setTimeout(() => setPlannerNotice(null), 7000);
+    return () => window.clearTimeout(timer);
+  }, [plannerNotice]);
+
+  useEffect(() => {
     const frame = requestAnimationFrame(() => {
       setExploredIds(readExploredIds());
       setExploredTrail(readExploredTrail());
@@ -413,6 +421,7 @@ export default function Home() {
     setMemoriesOpen(false);
     setFriendsOpen(false);
     setQuestsOpen(false);
+    setSelectedQuestId(null);
     setLeaderboardOpen(false);
   }, []);
 
@@ -458,14 +467,21 @@ export default function Home() {
   }, [closeOverlayScreens]);
 
   const openQuestsScreen = useCallback(() => {
+    if (questsOpen) {
+      setQuestsOpen(false);
+      setSelectedQuestId(null);
+      return;
+    }
     closeOverlayScreens();
     setQuestsOpen(true);
+    setSelectedQuestId(null);
     setWanderSheetOpen(false);
     setPlannerOpen(false);
     setFogActive(false);
     setHeatEscapeOpen(false);
     setWalkingActive(false);
-  }, [closeOverlayScreens]);
+    setHomeTab("map");
+  }, [closeOverlayScreens, questsOpen]);
 
   const openLeaderboardScreen = useCallback(() => {
     closeOverlayScreens();
@@ -480,8 +496,29 @@ export default function Home() {
   const goToDailyQuest = useCallback((quest: DailyQuest) => {
     applyStart({ label: quest.place.name, position: quest.place.position }, { fromUser: true });
     setQuestsOpen(false);
+    setSelectedQuestId(null);
     setHomeTab("map");
   }, [applyStart]);
+
+  const todaysQuests = useMemo(() => dailyQuests(), []);
+  const questPins = useMemo(() => {
+    if (!questsOpen) return [];
+    void questPointsTick;
+    const profile = readGamificationProfile();
+    return todaysQuests.map((quest, index) => ({
+      id: quest.id,
+      position: quest.place.position,
+      number: index + 1,
+      done: isQuestCompleted(quest.id, profile),
+    }));
+  }, [questsOpen, todaysQuests, questPointsTick]);
+
+  useEffect(() => {
+    if (!questsOpen) return;
+    const update = () => setQuestPointsTick((tick) => tick + 1);
+    window.addEventListener("wander:points", update);
+    return () => window.removeEventListener("wander:points", update);
+  }, [questsOpen]);
 
   const openExploreSuggestion = useCallback((suggestion: ExploreSuggestion) => {
     const nextMinutes = Math.max(5, Math.min(180, suggestion.minutes));
@@ -568,11 +605,12 @@ export default function Home() {
     "app-shell",
     fogActive ? "mode-fog fog-mode" : displayMode === "heat" ? "mode-heat" : "mode-discover",
     plannerOpen ? "planner-open" : "home-view",
-  ].join(" ");
+    questsOpen ? "quests-open" : "",
+  ].filter(Boolean).join(" ");
 
-  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen && !questsOpen && !leaderboardOpen;
-  const showHomeDock = !plannerOpen && !wanderSheetOpen && !walkingActive && !questsOpen && !leaderboardOpen;
-  const tabScreenOpen = savedOpen || exploreOpen || memoriesOpen || friendsOpen || questsOpen || leaderboardOpen;
+  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen && !leaderboardOpen;
+  const showHomeDock = !plannerOpen && !wanderSheetOpen && !walkingActive && !leaderboardOpen;
+  const tabScreenOpen = savedOpen || exploreOpen || memoriesOpen || friendsOpen || leaderboardOpen;
 
   function toggleFog() {
     if (fogActive) {
@@ -628,15 +666,6 @@ export default function Home() {
     window.setTimeout(() => setCelebratingFinish(false), 1800);
   }
 
-  function shareWalk() {
-    const text = `Walking ${route.title} · ${route.distanceKm.toFixed(1)} km · ${route.walkingMinutes} min in Adelaide`;
-    if (navigator.share) {
-      void navigator.share({ title: "Wander", text }).catch(() => undefined);
-      return;
-    }
-    void navigator.clipboard?.writeText(text).catch(() => undefined);
-  }
-
   function captureWalkMoment() {
     const stop = route.stops[Math.min(walkStopIndex, Math.max(route.stops.length - 1, 0))];
     if (stop) handleExploreStop(stop.id);
@@ -682,9 +711,14 @@ export default function Home() {
   return (
     <main className={shellClass}>
       {celebratingFinish && (
-        <div className="finish-confetti" aria-label="Walk complete">
-          {Array.from({ length: 26 }, (_, index) => <i key={index} style={{ "--confetti-index": index } as React.CSSProperties} />)}
-          <strong>Wander complete!</strong>
+        <div className="finish-confetti" aria-hidden="true">
+          {Array.from({ length: 48 }, (_, index) => (
+            <i
+              key={index}
+              className={index % 3 === 0 ? "is-round" : index % 3 === 1 ? "is-strip" : "is-square"}
+              style={{ "--confetti-index": index } as React.CSSProperties}
+            />
+          ))}
         </div>
       )}
       <WanderMap
@@ -697,6 +731,9 @@ export default function Home() {
         walkMode={walkingActive}
         walkStopIndex={walkStopIndex}
         walkPosition={walkPosition}
+        questPins={questPins}
+        selectedQuestId={selectedQuestId}
+        onSelectQuest={setSelectedQuestId}
         onExploreStop={handleExploreStop}
         onExplorationPercent={setExplorationPercent}
       />
@@ -728,7 +765,7 @@ export default function Home() {
             </div>
           </header>
 
-          <aside className="home-rail" aria-label="Map controls">
+      <aside className="home-rail" aria-label="Map controls">
             <button
               type="button"
               className={`home-rail-chip${fogActive ? " is-on" : ""}`}
@@ -739,16 +776,18 @@ export default function Home() {
               <Cloud size={18} strokeWidth={2.2} />
               <span>{fogActive ? "On" : "Off"}</span>
             </button>
-            <button
-              type="button"
-              className={`home-rail-chip${questsOpen ? " is-on" : ""}`}
-              aria-pressed={questsOpen}
-              aria-label="Open daily quests"
-              onClick={openQuestsScreen}
-            >
-              <MapPinned size={18} strokeWidth={2.2} />
-              <span>Quests</span>
-            </button>
+            <div className={`home-rail-quests${questsOpen ? " is-open" : ""}`}>
+              <button
+                type="button"
+                className={`home-rail-chip${questsOpen ? " is-on" : ""}`}
+                aria-pressed={questsOpen}
+                aria-label={questsOpen ? "Close daily quests" : "Open daily quests"}
+                onClick={openQuestsScreen}
+              >
+                <MapPinned size={18} strokeWidth={2.2} />
+                <span>Quests</span>
+              </button>
+            </div>
             <button
               type="button"
               className={`home-rail-chip${leaderboardOpen ? " is-on" : ""}`}
@@ -770,7 +809,7 @@ export default function Home() {
 
       {showHomeDock && (
         <div className={`home-dock${tabScreenOpen ? " is-saved" : ""}`}>
-          {!tabScreenOpen && (
+          {!tabScreenOpen && !questsOpen && (
             <button className="start-wander" type="button" onClick={openPlanner}>
               <span>Start wandering</span>
             </button>
@@ -847,9 +886,13 @@ export default function Home() {
 
       {questsOpen && !fogActive && (
         <DailyQuestsScreen
+          selectedQuestId={selectedQuestId}
+          onSelectQuest={setSelectedQuestId}
           onGoToQuest={goToDailyQuest}
-          onOpenLeaderboard={openLeaderboardScreen}
-          onClose={() => setQuestsOpen(false)}
+          onClose={() => {
+            setQuestsOpen(false);
+            setSelectedQuestId(null);
+          }}
         />
       )}
 

@@ -174,9 +174,6 @@ export function planWanderRoute({
     .slice(0, 12);
 
   const chosen = chooseWithinBudget(start, candidates, targetStops, minutes);
-  const shortestPossibleMinutes = Math.min(
-    ...candidates.map(({ place }) => estimatedMinutes(start, [place])),
-  );
 
   if (!chosen) {
     return {
@@ -188,7 +185,7 @@ export function planWanderRoute({
       shadeEstimate: 0,
       start,
       geometrySource: "grid",
-      unavailableReason: `The closest Wander from here needs about ${shortestPossibleMinutes} minutes. Try a little more time.`,
+      unavailableReason: "Add more time.",
     };
   }
   const byId = new Map(candidates.map((item) => [item.place.id, item]));

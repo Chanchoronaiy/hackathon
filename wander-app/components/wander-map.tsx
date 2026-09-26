@@ -23,6 +23,15 @@ function walkStopIcon(number: number, faded: boolean) {
   });
 }
 
+function questPinIcon(number: number, done: boolean, selected: boolean) {
+  return L.divIcon({
+    className: `quest-pin-marker${done ? " is-done" : ""}${selected ? " is-selected" : ""}`,
+    html: `<span><b>${number}</b></span>`,
+    iconSize: [34, 34],
+    iconAnchor: [17, 34],
+  });
+}
+
 function CreamWash() {
   const map = useMap();
   useEffect(() => {
@@ -64,6 +73,20 @@ function FitRoute({ geometry, enabled }: { geometry: LatLng[]; enabled: boolean 
     if (!enabled || geometry.length < 2) return;
     map.fitBounds(geometry, { padding: [72, 72], maxZoom: 16, animate: true });
   }, [map, key, enabled, geometry]);
+  return null;
+}
+
+function FitPositions({ positions, enabled }: { positions: LatLng[]; enabled: boolean }) {
+  const map = useMap();
+  const key = positions.map((point) => point.join(",")).join("|");
+  useEffect(() => {
+    if (!enabled || positions.length === 0) return;
+    if (positions.length === 1) {
+      map.setView(positions[0], 15, { animate: true });
+      return;
+    }
+    map.fitBounds(positions, { padding: [80, 100], maxZoom: 15, animate: true });
+  }, [map, key, enabled, positions]);
   return null;
 }
 
@@ -177,6 +200,9 @@ export default function WanderMap({
   walkMode = false,
   walkStopIndex = 0,
   walkPosition,
+  questPins = [],
+  selectedQuestId = null,
+  onSelectQuest,
   onExploreStop,
   onExplorationPercent,
 }: {
@@ -189,6 +215,9 @@ export default function WanderMap({
   walkMode?: boolean;
   walkStopIndex?: number;
   walkPosition?: LatLng | null;
+  questPins?: Array<{ id: string; position: LatLng; number: number; done?: boolean }>;
+  selectedQuestId?: string | null;
+  onSelectQuest?: (id: string) => void;
   onExploreStop: (id: string) => void;
   onExplorationPercent: (percent: number) => void;
 }) {
@@ -200,6 +229,7 @@ export default function WanderMap({
     ...exploredPositionsFor(exploredIds),
     ...exploredTrail.map((position, index) => ({ id: `trail-${index}`, position })),
   ], [exploredIds, exploredTrail]);
+  const questPositions = useMemo(() => questPins.map((pin) => pin.position), [questPins]);
   const youAreHere = useMemo(() => {
     if (walkMode && walkPosition) return walkPosition;
     if (!walkMode || route.geometry.length === 0) return start.position;
@@ -212,21 +242,33 @@ export default function WanderMap({
 
   return (
     <>
-      <div className={`map-stage${fogActive ? " fog-active" : ""}${walkMode ? " walk-mode" : ""}`} aria-label="Interactive map of central Adelaide">
+      <div className={`map-stage${fogActive ? " fog-active" : ""}${walkMode ? " walk-mode" : ""}${questPins.length ? " quest-mode" : ""}`} aria-label="Interactive map of central Adelaide">
         <MapContainer center={start.position} zoom={15} zoomControl={false} className="leaflet-map">
           <TileLayer
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             attribution="© OpenStreetMap contributors"
           />
           <CreamWash />
-          <Recenter position={walkMode ? youAreHere : start.position} zoom={walkMode ? 16 : undefined} />
-          <FitRoute geometry={route.geometry} enabled={showRoute && !fogActive && !walkMode} />
+          {!questPins.length ? (
+            <Recenter position={walkMode ? youAreHere : start.position} zoom={walkMode ? 16 : undefined} />
+          ) : null}
+          <FitRoute geometry={route.geometry} enabled={showRoute && !fogActive && !walkMode && questPins.length === 0} />
+          <FitPositions positions={questPositions} enabled={questPins.length > 0 && !walkMode} />
           <FogSync
             positions={exploredPositions}
             fogActive={fogActive || walkMode}
             onClearings={setClearings}
             onPercent={onExplorationPercent}
           />
+          {questPins.map((pin) => (
+            <Marker
+              key={pin.id}
+              position={pin.position}
+              icon={questPinIcon(pin.number, Boolean(pin.done), pin.id === selectedQuestId)}
+              eventHandlers={{ click: () => onSelectQuest?.(pin.id) }}
+              zIndexOffset={pin.id === selectedQuestId ? 600 : 400}
+            />
+          ))}
           {showRoute && (
             <>
               <Polyline positions={route.geometry} pathOptions={{ color: walkMode ? "#c45a30" : "#0b0e0c", weight: walkMode ? 10 : 12, opacity: fogActive ? .4 : .88, lineCap: "round", lineJoin: "round" }} />
