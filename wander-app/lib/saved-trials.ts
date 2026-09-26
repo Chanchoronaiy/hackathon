@@ -9,6 +9,7 @@ export type SavedTrial = {
   minutes: number;
   interests: string[];
   start?: LatLng;
+  geometry?: LatLng[];
   startName?: string;
   stopNames: string[];
   walkingMinutes: number;
@@ -38,6 +39,10 @@ function isSavedTrial(value: unknown): value is SavedTrial {
     && (trial.mode === "discover" || trial.mode === "heat")
     && typeof trial.minutes === "number"
     && Array.isArray(trial.interests)
+    && (trial.geometry === undefined || (
+      Array.isArray(trial.geometry)
+      && trial.geometry.every((point) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite))
+    ))
     && Array.isArray(trial.stopNames)
     && typeof trial.walkingMinutes === "number"
     && typeof trial.distanceKm === "number"

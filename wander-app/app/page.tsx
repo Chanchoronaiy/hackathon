@@ -475,6 +475,7 @@ export default function Home() {
       minutes: activePlan.minutes,
       interests: activePlan.interests,
       start: activePlan.start,
+      geometry: route.geometry.filter((_, index) => index % Math.max(1, Math.ceil(route.geometry.length / 64)) === 0),
       startName: activePlan.startName,
       stopNames: route.stops.map((stop) => stop.name),
       walkingMinutes: route.walkingMinutes,
@@ -483,7 +484,7 @@ export default function Home() {
     });
     setSavedTrials(next);
     openSavedScreen(null);
-  }, [activePlan, hasRoute, openSavedScreen, route.distanceKm, route.stops, route.title, route.walkingMinutes]);
+  }, [activePlan, hasRoute, openSavedScreen, route.distanceKm, route.geometry, route.stops, route.title, route.walkingMinutes]);
 
   const restoreTrial = useCallback((trial: SavedTrial) => {
     const nextMinutes = Math.max(5, Math.min(180, Math.round(trial.minutes)));

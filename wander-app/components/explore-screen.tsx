@@ -57,6 +57,29 @@ const SUGGESTIONS: ExploreSuggestion[] = [
 
 const FILTERS = ["For you", "Nearby", "Under 30 min", "Shady"] as const;
 
+const SUGGESTED_ROUTE_PATHS: Record<string, string> = {
+  "coffee-crawl": "M32 74 L62 74 L62 55 L94 55 L94 31 L132 31 L132 47 L168 47",
+  "north-terrace": "M28 30 L68 30 L68 51 L104 51 L104 72 L142 72 L142 49 L174 49",
+  "parkland-loop": "M34 63 L34 40 L70 40 L70 25 L122 25 L122 45 L164 45 L164 68 L114 68 L114 57 L76 57 L76 72",
+};
+
+function SuggestionRouteMap({ suggestion }: { suggestion: ExploreSuggestion }) {
+  const routePath = SUGGESTED_ROUTE_PATHS[suggestion.id] ?? SUGGESTED_ROUTE_PATHS["coffee-crawl"];
+  const points = [...routePath.matchAll(/([\d.]+) ([\d.]+)/g)];
+  const firstPoint = points[0];
+  const lastPoint = points.at(-1);
+
+  return (
+    <svg className={`explore-suggest-map is-${suggestion.accent}`} viewBox="0 0 200 100" aria-hidden="true">
+      <path className="explore-map-streets" d="M-10 18H210 M-10 39H210 M-10 60H210 M-10 81H210 M40-5V105 M84-5V105 M128-5V105 M172-5V105" />
+      <path className="explore-map-route-outline" d={routePath} />
+      <path className="explore-map-route" d={routePath} />
+      {firstPoint ? <circle className="explore-map-start" cx={firstPoint[1]} cy={firstPoint[2]} r="4.2" /> : null}
+      {lastPoint ? <circle className="explore-map-end" cx={lastPoint[1]} cy={lastPoint[2]} r="3.2" /> : null}
+    </svg>
+  );
+}
+
 type ExploreScreenProps = {
   onOpenSuggestion: (suggestion: ExploreSuggestion) => void;
   onOpenCollection?: (id: string) => void;
@@ -126,7 +149,7 @@ export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: Ex
             aria-label={`Open ${item.title}`}
             onClick={() => onOpenSuggestion(item)}
           >
-            <span className={`explore-suggest-map is-${item.accent}`} aria-hidden="true" />
+            <SuggestionRouteMap suggestion={item} />
             <span className="explore-suggest-body">
               <span className="explore-suggest-rating">
                 <Star size={13} fill="currentColor" aria-hidden="true" />
