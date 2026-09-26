@@ -805,7 +805,14 @@ export default function Home() {
     setHomeTab("map");
   }
 
-  function endWalk() {
+  function exitWalk() {
+    setWalkingActive(false);
+    setWalkStopIndex(0);
+    setWalkPosition(null);
+    setWanderSheetOpen(true);
+  }
+
+  function finishWalk() {
     setWalkingActive(false);
     setWalkStopIndex(0);
     setWalkPosition(null);
@@ -817,7 +824,7 @@ export default function Home() {
   function captureWalkMoment() {
     const stop = route.stops[Math.min(walkStopIndex, Math.max(route.stops.length - 1, 0))];
     if (stop) handleExploreStop(stop.id);
-    endWalk();
+    exitWalk();
     openMemoriesScreen();
   }
 
@@ -1238,7 +1245,8 @@ export default function Home() {
         <WalkModeChrome
           route={route}
           currentStopIndex={walkStopIndex}
-          onBack={endWalk}
+          onBack={exitWalk}
+          onFinish={finishWalk}
           onCapture={captureWalkMoment}
           onAdvance={() => {
             const stop = route.stops[walkStopIndex];

@@ -7,6 +7,7 @@ type WalkModeChromeProps = {
   route: WanderRoute;
   currentStopIndex: number;
   onBack: () => void;
+  onFinish: () => void;
   onCapture: () => void;
   onAdvance?: () => void;
 };
@@ -36,6 +37,7 @@ export default function WalkModeChrome({
   route,
   currentStopIndex,
   onBack,
+  onFinish,
   onCapture,
   onAdvance,
 }: WalkModeChromeProps) {
@@ -104,7 +106,7 @@ export default function WalkModeChrome({
               <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
               Capture
             </button>
-            <button type="button" className="walk-done-end" onClick={onBack}>
+            <button type="button" className="walk-done-end" onClick={onFinish}>
               <Check size={18} strokeWidth={2.4} aria-hidden="true" />
               End walk
             </button>

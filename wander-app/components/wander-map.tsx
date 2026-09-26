@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
-import { CircleMarker, MapContainer, Marker, Polyline, Popup, Rectangle, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, Polyline, Popup, Rectangle, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { POI_DATA_TIMESTAMP } from "@/lib/adelaide-data";
 import {
   EXPLORATION_RADIUS_M,
@@ -272,7 +272,7 @@ export default function WanderMap({
             onClearings={setClearings}
             onPercent={onExplorationPercent}
           />
-          {!walkMode && (
+          {showRoute && !walkMode && (
             <Marker
               position={streetViewBuddyPosition ?? start.position}
               icon={streetViewBuddyIcon()}
@@ -286,9 +286,7 @@ export default function WanderMap({
                   onStreetViewPosition?.(next);
                 },
               }}
-            >
-              <Tooltip direction="top" offset={[0, -40]} opacity={0.96}>Drag me anywhere to preview Street View</Tooltip>
-            </Marker>
+            />
           )}
           {questPins.map((pin) => (
             <Marker
