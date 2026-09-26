@@ -242,7 +242,7 @@ export default function WanderMap({
   const start = route.start;
   const explored = useMemo(() => new Set(exploredIds), [exploredIds]);
   const [clearings, setClearings] = useState<Clearing[]>([]);
-  const [baseMapStyle, setBaseMapStyle] = useState<"calm" | "detailed" | "google">("calm");
+  const [baseMapStyle, setBaseMapStyle] = useState<"detailed" | "google">("detailed");
   const [streetViewBuddyPosition, setStreetViewBuddyPosition] = useState<LatLng | null>(null);
   const exploredPositions = useMemo(() => [
     ...exploredPositionsFor(exploredIds),
@@ -273,21 +273,13 @@ export default function WanderMap({
 
   return (
     <>
-      <div className={`map-stage${baseMapStyle === "calm" ? " map-calm" : ""}${fogActive ? " fog-active" : ""}${walkMode ? " walk-mode" : ""}${questPins.length ? " quest-mode" : ""}`} aria-label="Interactive map of central Adelaide">
+      <div className={`map-stage${fogActive ? " fog-active" : ""}${walkMode ? " walk-mode" : ""}${questPins.length ? " quest-mode" : ""}`} aria-label="Interactive map of central Adelaide">
         <MapContainer center={start.position} zoom={15} zoomControl={false} className="leaflet-map">
-          {baseMapStyle === "calm" ? (
-            <TileLayer
-              key="calm-map"
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution="© OpenStreetMap contributors"
-            />
-          ) : (
-            <TileLayer
-              key="detailed-map"
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution="© OpenStreetMap contributors"
-            />
-          )}
+          <TileLayer
+            key="detailed-map"
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution="© OpenStreetMap contributors"
+          />
           <CreamWash />
           {!questPins.length ? (
             <Recenter position={walkMode ? youAreHere : start.position} zoom={walkMode ? 16 : undefined} />
@@ -454,11 +446,11 @@ export default function WanderMap({
           <button
             type="button"
             className="map-style-toggle"
-            onClick={() => setBaseMapStyle((current) => current === "calm" ? "detailed" : current === "detailed" ? "google" : "calm")}
+            onClick={() => setBaseMapStyle((current) => current === "detailed" ? "google" : "detailed")}
             aria-label={`Current map background: ${baseMapStyle}. Switch map background`}
           >
-            <span aria-hidden="true">{baseMapStyle === "calm" ? "◫" : baseMapStyle === "detailed" ? "◎" : "G"}</span>
-            {baseMapStyle === "calm" ? "Calm map" : baseMapStyle === "detailed" ? "Detailed map" : "Google map"}
+            <span aria-hidden="true">{baseMapStyle === "detailed" ? "◎" : "G"}</span>
+            {baseMapStyle === "detailed" ? "Detailed map" : "Google map"}
           </button>
         )}
         {!walkMode && (

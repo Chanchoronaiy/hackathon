@@ -68,7 +68,6 @@ button,input { font:inherit; } button { cursor:pointer; }
 .leaflet-map { width:100%; height:100%; background:#ece7dc; }
 .leaflet-control-attribution { font-size:10px!important; opacity:.72; }
 .leaflet-tile-pane { filter:saturate(.72) contrast(.96) brightness(1.03); }
-.map-stage.map-calm .leaflet-tile-pane { filter:grayscale(.24) saturate(.42) contrast(.86) brightness(1.14); }
 .map-loading {
   position:absolute; inset:0; display:grid; place-items:center; gap:12px; color:rgba(247,243,234,.92);
   background:radial-gradient(ellipse at 40% 35%, #2a3328, #161915 70%);
