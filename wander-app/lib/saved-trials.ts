@@ -13,6 +13,7 @@ export type SavedTrial = {
   stopNames: string[];
   walkingMinutes: number;
   distanceKm: number;
+  title?: string;
 };
 
 export function readSavedTrials(): SavedTrial[] {

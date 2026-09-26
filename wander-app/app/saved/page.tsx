@@ -1,58 +1,53 @@
 "use client";
 
-import { ArrowLeft, Bookmark, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useCallback, useSyncExternalStore } from "react";
+import SavedScreen from "@/components/saved-screen";
 import { deleteSavedTrial, readSavedTrials, type SavedTrial } from "@/lib/saved-trials";
 
-function durationLabel(minutes: number) {
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-  if (!hours) return `${remainder} min`;
-  if (!remainder) return `${hours} hr`;
-  return `${hours} hr ${remainder} min`;
+const SAVED_EVENT = "wander-saved-updated";
+
+function subscribe(onStoreChange: () => void) {
+  window.addEventListener(SAVED_EVENT, onStoreChange);
+  window.addEventListener("storage", onStoreChange);
+  return () => {
+    window.removeEventListener(SAVED_EVENT, onStoreChange);
+    window.removeEventListener("storage", onStoreChange);
+  };
+}
+
+function getSnapshot() {
+  return readSavedTrials();
+}
+
+function getServerSnapshot(): SavedTrial[] {
+  return [];
 }
 
 export default function SavedTrialsPage() {
-  const [trials, setTrials] = useState<SavedTrial[]>([]);
+  const trials = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  useEffect(() => {
-    setTrials(readSavedTrials());
+  const removeTrial = useCallback((id: string) => {
+    deleteSavedTrial(id);
+    window.dispatchEvent(new Event(SAVED_EVENT));
   }, []);
 
   return (
-    <main className="saved-page">
-      <header className="saved-page-header">
-        <a className="saved-back" href="/"><ArrowLeft size={18} /> Back to Wander</a>
-        <div className="saved-page-brand"><Bookmark size={18} /> Wander</div>
-      </header>
-      <section className="saved-page-content" aria-labelledby="saved-trials-title">
-        <p className="saved-page-kicker">YOUR COLLECTION</p>
-        <h1 id="saved-trials-title">Saved trials</h1>
-        <p className="saved-page-intro">Keep the wanders worth repeating. Saved on this device.</p>
-        {trials.length === 0 ? (
-          <div className="saved-page-empty">
-            <Bookmark size={26} />
-            <strong>No saved trials yet</strong>
-            <span>Generate a wander, then choose Save from the menu.</span>
-          </div>
-        ) : (
-          <ul className="saved-page-list">
-            {trials.map((trial) => (
-              <li key={trial.id} className="saved-page-card">
-                <div>
-                  <span className="saved-page-mode">{trial.mode === "heat" ? "Beat the heat" : "Discover"}</span>
-                  <h2>{durationLabel(trial.minutes)} wander</h2>
-                  <p>{trial.distanceKm.toFixed(1)} km · {trial.walkingMinutes} min walking</p>
-                  <small>{trial.stopNames.slice(0, 3).join(" · ") || "Adelaide loop"}</small>
-                </div>
-                <button type="button" className="saved-page-delete" aria-label={`Delete ${durationLabel(trial.minutes)} saved trial`} onClick={() => setTrials(deleteSavedTrial(trial.id))}>
-                  <Trash2 size={18} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+    <main className="saved-page-shell">
+      <SavedScreen
+        trials={trials}
+        onRemoveTrial={removeTrial}
+        onOpenTrial={() => {
+          window.location.assign("/");
+        }}
+      />
+      <nav className="home-nav saved-page-nav" aria-label="Primary">
+        <Link href="/">Map</Link>
+        <Link href="/">Explore</Link>
+        <span className="is-disabled">Memories</span>
+        <Link href="/saved" className="is-active" aria-current="page">Saved</Link>
+        <span className="is-disabled">Friends</span>
+      </nav>
     </main>
   );
 }

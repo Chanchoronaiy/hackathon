@@ -1,4 +1,4 @@
-export type Interest = "art" | "coffee" | "green";
+export type Interest = "art" | "coffee" | "green" | "photo";
 export type PlaceCategory = Interest | "history" | "water" | "calm";
 
 export type AdelaidePlace = {
@@ -26,14 +26,14 @@ export const START: AdelaidePlace = {
 // Keeping this list small makes the judging demo deterministic and inspectable.
 export const ADELAIDE_PLACES: AdelaidePlace[] = [
   { id: "captain-sturt", name: "Captain Charles Sturt", category: "art", position: [-34.92734, 138.59944], reason: "A bronze figure hiding beside the square", surprise: 4, comfort: 1 },
-  { id: "rundle-lantern", name: "Rundle Lantern", category: "art", position: [-34.92278, 138.60572], reason: "A glowing city-scale artwork", surprise: 4, comfort: 1 },
+  { id: "rundle-lantern", name: "Rundle Lantern", category: "photo", position: [-34.92278, 138.60572], reason: "A glowing city-scale artwork made for photos", surprise: 4, comfort: 1 },
   { id: "arlos", name: "Arlo's", category: "coffee", position: [-34.92453, 138.59987], reason: "A small coffee pause on King William Street", surprise: 2, comfort: 2 },
   { id: "elementary", name: "Elementary Coffee", category: "coffee", position: [-34.92655, 138.59596], reason: "A tucked-away west-end coffee stop", surprise: 3, comfort: 2, openingHours: "Mo–Fr 07:30–15:00" },
   { id: "part-time-lover", name: "Part-Time Lover", category: "coffee", position: [-34.92633, 138.60062], reason: "A playful courtyard detour", surprise: 4, comfort: 2 },
   { id: "light-square", name: "Light Square / Wauwi", category: "green", position: [-34.92433, 138.59293], reason: "Trees, lawns and a breather from traffic", surprise: 2, comfort: 5 },
   { id: "helen-mayo", name: "Helen Mayo Park", category: "green", position: [-34.91972, 138.59053], reason: "A riverside green edge of the city", surprise: 3, comfort: 5 },
-  { id: "botanic-gardens", name: "Adelaide Botanic Gardens", category: "green", position: [-34.918396, 138.61111], reason: "Leafy garden paths and historic glasshouses", surprise: 5, comfort: 5 },
-  { id: "himeji-garden", name: "Adelaide Himeji Garden", category: "green", position: [-34.93575, 138.609821], reason: "A quiet Japanese garden at the city edge", surprise: 5, comfort: 5 },
+  { id: "botanic-gardens", name: "Adelaide Botanic Gardens", category: "photo", position: [-34.918396, 138.61111], reason: "Leafy garden paths and historic glasshouses", surprise: 5, comfort: 5 },
+  { id: "himeji-garden", name: "Adelaide Himeji Garden", category: "photo", position: [-34.93575, 138.609821], reason: "A quiet Japanese garden at the city edge", surprise: 5, comfort: 5 },
   { id: "veale-gardens", name: "Veale Gardens", category: "green", position: [-34.936856, 138.597899], reason: "Curving garden paths through the southern parklands", surprise: 4, comfort: 5 },
   { id: "bonython-park", name: "Bonython Park", category: "green", position: [-34.914448, 138.579028], reason: "A longer riverside escape west of the city", surprise: 4, comfort: 5 },
   { id: "central-market", name: "Adelaide Central Market", category: "history", position: [-34.928943, 138.597524], reason: "A lively city landmark with more than a century of market history", surprise: 4, comfort: 3 },

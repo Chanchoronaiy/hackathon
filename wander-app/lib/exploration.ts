@@ -2,6 +2,9 @@ import { ADELAIDE_PLACES, START, type AdelaidePlace } from "@/lib/adelaide-data"
 import type { LatLng } from "@/lib/route-planner";
 
 const STORAGE_KEY = "wander:explored";
+const TRAIL_STORAGE_KEY = "wander:explored-trail";
+const MIN_TRAIL_SPACING_M = 24;
+const MAX_TRAIL_POINTS = 600;
 
 /** Soft clearing radius used for fog holes and viewport % estimates (metres). */
 export const EXPLORATION_RADIUS_M = 180;
@@ -30,6 +33,35 @@ export function markExplored(id: string): string[] {
   return next;
 }
 
+export function readExploredTrail(): LatLng[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(TRAIL_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((point): point is LatLng => (
+      Array.isArray(point)
+      && point.length === 2
+      && point.every((value) => typeof value === "number" && Number.isFinite(value))
+    ));
+  } catch {
+    return [];
+  }
+}
+
+/** Add a GPS point only after the walker has moved far enough to extend the cleared trail. */
+export function recordExploredPosition(position: LatLng): LatLng[] {
+  const current = readExploredTrail();
+  const previous = current.at(-1);
+  if (previous && distanceMetres(previous, position) < MIN_TRAIL_SPACING_M) return current;
+  const next = [...current, position].slice(-MAX_TRAIL_POINTS);
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(TRAIL_STORAGE_KEY, JSON.stringify(next));
+  }
+  return next;
+}
+
 const PLACE_INDEX = new Map<string, AdelaidePlace>([
   [START.id, START],
   ...ADELAIDE_PLACES.map((place) => [place.id, place] as const),
@@ -42,7 +74,7 @@ export function exploredPositionsFor(ids: string[]): Array<{ id: string; positio
     .map((place) => ({ id: place.id, position: place.position }));
 }
 
-function distanceMetres(a: LatLng, b: LatLng) {
+export function distanceMetres(a: LatLng, b: LatLng) {
   const latitudeKm = (a[0] - b[0]) * 111;
   const longitudeKm = (a[1] - b[1]) * 91;
   return Math.hypot(latitudeKm, longitudeKm) * 1000;

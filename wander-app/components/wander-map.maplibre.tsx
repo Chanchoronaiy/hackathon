@@ -153,7 +153,7 @@ function ensureRouteLayers(map: MapLibreMap, colour: string, fogActive: boolean)
         "circle-color": [
           "case",
           ["get", "explored"],
-          "#f7f3ea",
+          "#fff9d6",
           ["get", "colour"],
         ],
       },
@@ -180,7 +180,7 @@ export default function WanderMap({
   onExploreStop: (id: string) => void;
   onExplorationPercent: (percent: number) => void;
 }) {
-  const colour = mode === "discover" ? "#d8ff64" : "#ffb75e";
+  const colour = mode === "discover" ? "#8ea66b" : "#ffe08a";
   const start = route.start;
   const explored = useMemo(() => new Set(exploredIds), [exploredIds]);
   const exploredPositions = useMemo(() => exploredPositionsFor(exploredIds), [exploredIds]);

@@ -12,6 +12,7 @@ export type WanderPlanInput = {
   start?: LatLng;
   startName?: string;
   exploredIds?: string[];
+  preferUnexplored?: boolean;
   weather?: Pick<WeatherSnapshot, "apparent" | "uvIndex"> | null;
 };
 
@@ -133,6 +134,7 @@ export function planWanderRoute({
   start: startPosition,
   startName,
   exploredIds = [],
+  preferUnexplored = true,
   weather = null,
 }: WanderPlanInput): WanderRoute {
   const start = resolveStart(startPosition, startName);
@@ -156,7 +158,7 @@ export function planWanderRoute({
     .filter((place) => place.category !== "calm")
     .map((place) => {
       const interestBoost = selectedInterests.has(place.category as Interest) ? 5 : 0;
-      const noveltyBoost = explored.has(place.id) ? 0 : 2.4;
+      const noveltyBoost = explored.has(place.id) ? 0 : (preferUnexplored ? 5.2 : 1.2);
       const modeScore = mode === "heat" ? place.comfort * 2.2 : place.surprise * 1.8 + interestBoost;
       const detour = distanceKm(start.position, place.position) * detourWeight;
       return {
