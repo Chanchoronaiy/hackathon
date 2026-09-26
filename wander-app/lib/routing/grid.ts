@@ -14,6 +14,6 @@ export function gridLoopGeometry(waypoints: LatLng[]): LatLng[] {
 export const gridRoutingAdapter: RouteGeometryAdapter = {
   id: "grid",
   async getLoopGeometry(waypoints) {
-    return gridLoopGeometry(waypoints);
+    return { geometry: gridLoopGeometry(waypoints) };
   },
 };

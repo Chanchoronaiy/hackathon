@@ -3,6 +3,8 @@ import type { RouteGeometryAdapter } from "@/lib/routing/types";
 
 type DirectionsResponse = {
   geometry?: LatLng[];
+  distanceKm?: number;
+  walkingMinutes?: number;
   error?: string;
 };
 
@@ -17,6 +19,10 @@ export const openRouteServiceAdapter: RouteGeometryAdapter = {
     if (!response.ok) throw new Error(`directions unavailable (${response.status})`);
     const data = (await response.json()) as DirectionsResponse;
     if (!data.geometry?.length) throw new Error(data.error ?? "empty geometry");
-    return data.geometry;
+    return {
+      geometry: data.geometry,
+      distanceKm: data.distanceKm,
+      walkingMinutes: data.walkingMinutes,
+    };
   },
 };

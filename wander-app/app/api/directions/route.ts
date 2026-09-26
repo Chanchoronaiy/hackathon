@@ -9,6 +9,12 @@ type OrsFeatureCollection = {
     geometry?: {
       coordinates?: [number, number][];
     };
+    properties?: {
+      summary?: {
+        distance?: number;
+        duration?: number;
+      };
+    };
   }>;
 };
 
@@ -60,5 +66,11 @@ export async function POST(request: Request) {
   }
 
   const geometry: LatLng[] = line.map(([lng, lat]) => [lat, lng]);
-  return Response.json({ geometry, provider: "openrouteservice" });
+  const summary = data.features?.[0]?.properties?.summary;
+  return Response.json({
+    geometry,
+    provider: "openrouteservice",
+    distanceKm: typeof summary?.distance === "number" ? summary.distance / 1000 : undefined,
+    walkingMinutes: typeof summary?.duration === "number" ? Math.round(summary.duration / 60) : undefined,
+  });
 }

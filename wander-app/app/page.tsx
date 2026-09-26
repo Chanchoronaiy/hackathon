@@ -123,7 +123,12 @@ export default function Home() {
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
   const [exploredIds, setExploredIds] = useState<string[]>([]);
-  const [orsOverride, setOrsOverride] = useState<{ key: string; geometry: LatLng[] } | null>(null);
+  const [orsOverride, setOrsOverride] = useState<{
+    key: string;
+    geometry: LatLng[];
+    distanceKm?: number;
+    walkingMinutes?: number;
+  } | null>(null);
   const [fogActive, setFogActive] = useState(false);
   const [explorationPercent, setExplorationPercent] = useState(0);
   const [generating, setGenerating] = useState(false);
@@ -161,7 +166,13 @@ export default function Home() {
 
   const route = useMemo(
     () => orsOverride?.key === loopKey
-      ? { ...planned, geometry: orsOverride.geometry, geometrySource: "openrouteservice" as const }
+      ? {
+          ...planned,
+          geometry: orsOverride.geometry,
+          distanceKm: orsOverride.distanceKm ?? planned.distanceKm,
+          walkingMinutes: orsOverride.walkingMinutes ?? planned.walkingMinutes,
+          geometrySource: "openrouteservice" as const,
+        }
       : planned,
     [planned, orsOverride, loopKey],
   );
@@ -301,9 +312,9 @@ export default function Home() {
       planned.start.position,
     ];
     let cancelled = false;
-    void resolveLoopGeometry(waypoints).then(({ geometry, source }) => {
+    void resolveLoopGeometry(waypoints).then(({ geometry, distanceKm, walkingMinutes, source }) => {
       if (cancelled || source === "grid") return;
-      setOrsOverride({ key: loopKey, geometry });
+      setOrsOverride({ key: loopKey, geometry, distanceKm, walkingMinutes });
     });
     return () => { cancelled = true; };
   }, [hasRoute, loopKey, planned.start.position, planned.stops]);
