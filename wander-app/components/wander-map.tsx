@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
-import { CircleMarker, MapContainer, Marker, Polyline, Popup, Rectangle, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, Polyline, Popup, Rectangle, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { POI_DATA_TIMESTAMP } from "@/lib/adelaide-data";
 import {
   EXPLORATION_RADIUS_M,
@@ -29,6 +29,15 @@ function questPinIcon(number: number, done: boolean, selected: boolean) {
     html: `<span><b>${number}</b></span>`,
     iconSize: [34, 34],
     iconAnchor: [17, 34],
+  });
+}
+
+function streetViewBuddyIcon() {
+  return L.divIcon({
+    className: "streetview-buddy-marker",
+    html: `<span aria-hidden="true">👋</span>`,
+    iconSize: [48, 48],
+    iconAnchor: [24, 42],
   });
 }
 
@@ -203,6 +212,7 @@ export default function WanderMap({
   questPins = [],
   selectedQuestId = null,
   onSelectQuest,
+  onStreetViewPosition,
   onExploreStop,
   onExplorationPercent,
 }: {
@@ -218,6 +228,7 @@ export default function WanderMap({
   questPins?: Array<{ id: string; position: LatLng; number: number; done?: boolean }>;
   selectedQuestId?: string | null;
   onSelectQuest?: (id: string) => void;
+  onStreetViewPosition?: (position: LatLng) => void;
   onExploreStop: (id: string) => void;
   onExplorationPercent: (percent: number) => void;
 }) {
@@ -225,6 +236,7 @@ export default function WanderMap({
   const start = route.start;
   const explored = useMemo(() => new Set(exploredIds), [exploredIds]);
   const [clearings, setClearings] = useState<Clearing[]>([]);
+  const [streetViewBuddyPosition, setStreetViewBuddyPosition] = useState<LatLng | null>(null);
   const exploredPositions = useMemo(() => [
     ...exploredPositionsFor(exploredIds),
     ...exploredTrail.map((position, index) => ({ id: `trail-${index}`, position })),
@@ -260,6 +272,24 @@ export default function WanderMap({
             onClearings={setClearings}
             onPercent={onExplorationPercent}
           />
+          {!walkMode && (
+            <Marker
+              position={streetViewBuddyPosition ?? start.position}
+              icon={streetViewBuddyIcon()}
+              draggable
+              zIndexOffset={700}
+              eventHandlers={{
+                dragend: (event) => {
+                  const point = event.target.getLatLng();
+                  const next: LatLng = [point.lat, point.lng];
+                  setStreetViewBuddyPosition(next);
+                  onStreetViewPosition?.(next);
+                },
+              }}
+            >
+              <Tooltip direction="top" offset={[0, -40]} opacity={0.96}>Drag me anywhere to preview Street View</Tooltip>
+            </Marker>
+          )}
           {questPins.map((pin) => (
             <Marker
               key={pin.id}

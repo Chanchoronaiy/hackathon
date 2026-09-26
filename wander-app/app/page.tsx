@@ -12,6 +12,7 @@ import SavedScreen from "@/components/saved-screen";
 import WalkModeChrome from "@/components/walk-mode-chrome";
 import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
+import StreetViewDialog from "@/components/street-view-dialog";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
 import { dailyQuests, isQuestCompleted, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
@@ -169,11 +170,12 @@ export default function Home() {
   const [friendsOpen, setFriendsOpen] = useState(false);
   const [questsOpen, setQuestsOpen] = useState(false);
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null);
-  const [questPointsTick, setQuestPointsTick] = useState(0);
+  const [_questPointsTick, setQuestPointsTick] = useState(0);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
   const [savedTrials, setSavedTrials] = useState<SavedTrial[]>([]);
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
+  const [streetViewPosition, setStreetViewPosition] = useState<LatLng | null>(null);
   const [homeTab, setHomeTab] = useState<"map" | "explore" | "memories" | "saved" | "friends">("map");
 
   const totalMinutes = wanderHours * 60 + wanderMinutes;
@@ -549,6 +551,8 @@ export default function Home() {
     setDestinationQuery(destination.label);
     setPendingDestination(destination);
     setSearchFromOpen(true);
+    setQuestsOpen(false);
+    setSelectedQuestId(null);
     clearUnusedRoute();
   }, [clearUnusedRoute]);
 
@@ -643,9 +647,7 @@ export default function Home() {
   }, [applyPlan, applyStart, preferUnexplored, start, startName]);
 
   const todaysQuests = useMemo(() => dailyQuests(), []);
-  const questPins = useMemo(() => {
-    if (!questsOpen) return [];
-    void questPointsTick;
+  const questPins = !questsOpen ? [] : (() => {
     const profile = readGamificationProfile();
     return todaysQuests.map((quest, index) => ({
       id: quest.id,
@@ -653,7 +655,7 @@ export default function Home() {
       number: index + 1,
       done: isQuestCompleted(quest.id, profile),
     }));
-  }, [questsOpen, todaysQuests, questPointsTick]);
+  })();
 
   useEffect(() => {
     if (!questsOpen) return;
@@ -884,12 +886,28 @@ export default function Home() {
         onSelectQuest={setSelectedQuestId}
         onExploreStop={handleExploreStop}
         onExplorationPercent={setExplorationPercent}
+        onStreetViewPosition={setStreetViewPosition}
       />
+      {streetViewPosition && (
+        <StreetViewDialog
+          name="Street View preview"
+          position={streetViewPosition}
+          onClose={() => setStreetViewPosition(null)}
+        />
+      )}
 
       {showMapChrome && (
         <>
           <header className="home-top">
-            <button type="button" className="home-profile" aria-label="Open profile">
+            <button
+              type="button"
+              className="home-profile"
+              aria-label="Open profile"
+              onClick={() => {
+                setQuestsOpen(false);
+                setSelectedQuestId(null);
+              }}
+            >
               <span aria-hidden="true">AS</span>
             </button>
             <div className="home-search">
@@ -900,6 +918,8 @@ export default function Home() {
                 value={destinationQuery}
                 onQueryChange={(query) => {
                   setDestinationQuery(query);
+                  setQuestsOpen(false);
+                  setSelectedQuestId(null);
                   if (!query.trim()) setSearchFromOpen(false);
                 }}
                 onSelect={selectSearchDestination}
@@ -907,15 +927,27 @@ export default function Home() {
                 locating={locationStatus === "locating"}
                 statusNote={null}
                 fromValue={fromQuery}
-                onFromQueryChange={setFromQuery}
+                onFromQueryChange={(query) => {
+                  setFromQuery(query);
+                  setQuestsOpen(false);
+                  setSelectedQuestId(null);
+                }}
                 onFromSelect={selectSearchFrom}
                 fromExpanded={searchFromOpen}
-                onFromExpandedChange={setSearchFromOpen}
+                onFromExpandedChange={(expanded) => {
+                  setSearchFromOpen(expanded);
+                  if (expanded) {
+                    setQuestsOpen(false);
+                    setSelectedQuestId(null);
+                  }
+                }}
                 onClearDestination={() => {
                   setDestinationQuery("");
                   setPendingDestination(null);
                   clearUnusedRoute();
                   setSearchFromOpen(false);
+                  setQuestsOpen(false);
+                  setSelectedQuestId(null);
                 }}
               />
             </div>

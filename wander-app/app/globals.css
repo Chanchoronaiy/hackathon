@@ -1167,6 +1167,21 @@ button,input { font:inherit; } button { cursor:pointer; }
 .streetview-card h2 { margin:3px 0 0; font-size:21px; }
 .streetview-card header button,.checkin-close { display:grid; place-items:center; width:36px; height:36px; border:0; border-radius:50%; background:rgba(15,18,15,.08); }
 .streetview-card iframe { display:block; width:100%; height:min(56vh,430px); border:0; }
+.streetview-buddy-marker { background:transparent; border:0; }
+.streetview-buddy-marker span {
+  display:grid;
+  place-items:center;
+  width:42px;
+  height:42px;
+  border:3px solid #172019;
+  border-radius:50% 50% 48% 48%;
+  background:#65a9ff;
+  box-shadow:0 5px 0 #172019, 0 7px 16px rgb(16 25 18 / .3);
+  font-size:22px;
+  cursor:grab;
+  transform:rotate(-6deg);
+}
+.streetview-buddy-marker span:active { cursor:grabbing; }
 .streetview-empty { display:grid; place-items:center; min-height:300px; padding:36px; text-align:center; background:#e7ecdf; }
 .streetview-empty strong { margin-top:12px; }
 .streetview-empty p { max-width:390px; color:var(--muted); line-height:1.5; }
