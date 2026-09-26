@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { CircleMarker, MapContainer, Polyline, Popup, Rectangle, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { POI_DATA_TIMESTAMP } from "@/lib/adelaide-data";
 import {
+  EXPLORATION_RADIUS_M,
   estimateViewportExplorationPercent,
   exploredPositionsFor,
   type MapBounds,
@@ -60,10 +61,13 @@ function projectClearings(
   map: ReturnType<typeof useMap>,
   positions: Array<{ id: string; position: LatLng }>,
 ): Clearing[] {
-  const size = map.getSize();
-  const radius = Math.max(42, Math.min(size.x, size.y) * 0.11);
   return positions.map(({ id, position }) => {
     const point = map.latLngToContainerPoint(position);
+    const radiusEdge = map.latLngToContainerPoint([
+      position[0] + EXPLORATION_RADIUS_M / 111_000,
+      position[1],
+    ]);
+    const radius = Math.max(2, Math.abs(point.y - radiusEdge.y));
     return { id, x: point.x, y: point.y, r: radius };
   });
 }
@@ -93,11 +97,11 @@ function FogSync({
   const positionKey = positions.map((item) => `${item.id}:${item.position.join(",")}`).join("|");
 
   useMapEvents({
-    move() {
+    moveend() {
       onClearings(projectClearings(map, positions));
       if (fogActive) onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     },
-    zoom() {
+    zoomend() {
       onClearings(projectClearings(map, positions));
       if (fogActive) onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     },

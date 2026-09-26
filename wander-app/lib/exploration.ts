@@ -62,8 +62,10 @@ export function estimateViewportExplorationPercent(
   radiusMetres = EXPLORATION_RADIUS_M,
 ): number {
   if (positions.length === 0) return 0;
-  const rows = 22;
-  const cols = 22;
+  // A denser sampling grid keeps small explored patches visible in the
+  // percentage when the user zooms out over a larger area.
+  const rows = 48;
+  const cols = 48;
   let covered = 0;
   let total = 0;
   for (let row = 0; row < rows; row += 1) {
