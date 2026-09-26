@@ -26,7 +26,6 @@ export const START: AdelaidePlace = {
 // Keeping this list small makes the judging demo deterministic and inspectable.
 export const ADELAIDE_PLACES: AdelaidePlace[] = [
   { id: "captain-sturt", name: "Captain Charles Sturt", category: "art", position: [-34.92734, 138.59944], reason: "A bronze figure hiding beside the square", surprise: 4, comfort: 1 },
-  { id: "car-park", name: "Car Park", category: "art", position: [-34.92370, 138.59565], reason: "Public art with an intentionally ordinary name", surprise: 5, comfort: 1 },
   { id: "rundle-lantern", name: "Rundle Lantern", category: "art", position: [-34.92278, 138.60572], reason: "A glowing city-scale artwork", surprise: 4, comfort: 1 },
   { id: "pigeon", name: "Pigeon", category: "art", position: [-34.92299, 138.60184], reason: "Adelaide's oversized laneway local", surprise: 5, comfort: 1 },
   { id: "arlos", name: "Arlo's", category: "coffee", position: [-34.92453, 138.59987], reason: "A small coffee pause on King William Street", surprise: 2, comfort: 2 },
