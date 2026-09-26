@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Bookmark, ChevronUp, Coffee, Compass, Eye, Leaf, MapPin, Palette, Sun, Trees, X } from "lucide-react";
+import { Bookmark, ChevronUp, Cloud, Coffee, Compass, Leaf, MapPin, Palette, Sun, Trees, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
@@ -459,7 +459,7 @@ export default function Home() {
                   setHeatEscapeOpen(false);
                 }}
               >
-                {fogActive ? <X size={18} /> : <Eye size={18} />}
+                {fogActive ? <X size={18} /> : <Cloud size={18} />}
                 <span>{fogActive ? "Exit" : "Explore"}</span>
               </button>
             </div>

@@ -346,7 +346,7 @@ button,input { font:inherit; } button { cursor:pointer; }
   .map-actions { right:14px; top:70px; gap:8px; }
   .explore-button,.calm-button { min-height:42px; padding:0 12px; font-size:13px; }
   .calm-card { right:14px; left:14px; top:auto; bottom:calc(52vh + 24px); width:auto; }
-  .map-caption { left:14px; right:auto; bottom:auto; top:70px; max-width:46vw; }
+  .map-caption { display:none; }
   .fog-mode .map-actions { left:50%; right:auto; top:auto; bottom:28px; transform:translateX(-50%); align-items:center; }
   .fog-mode .explore-pill { position:absolute; top:70px; right:14px; }
 }
