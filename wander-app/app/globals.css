@@ -591,6 +591,13 @@ button,input { font:inherit; } button { cursor:pointer; }
   backdrop-filter:blur(14px); font:inherit; font-size:12px; font-weight:800; cursor:pointer;
 }
 .map-style-toggle:hover { background:#fff; }
+.google-map-background {
+  position:absolute; inset:0; z-index:2; background:#ece7dc;
+}
+.google-map-error {
+  display:grid; place-items:center; padding:32px; color:var(--ink); text-align:center;
+  background:rgba(247,243,234,.96); font-size:14px; font-weight:750;
+}
 
 .home-explore-pill {
   position:absolute; z-index:510; left:18px;

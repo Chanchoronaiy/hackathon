@@ -12,6 +12,7 @@ import {
 } from "@/lib/exploration";
 import type { LatLng, WanderRoute } from "@/lib/route-planner";
 import { popularityScore, type PopularPlace } from "@/lib/popularity";
+import GoogleMapBackground from "@/components/google-map-background";
 
 type Clearing = { id: string; x: number; y: number; r: number };
 
@@ -239,7 +240,7 @@ export default function WanderMap({
   const start = route.start;
   const explored = useMemo(() => new Set(exploredIds), [exploredIds]);
   const [clearings, setClearings] = useState<Clearing[]>([]);
-  const [baseMapStyle, setBaseMapStyle] = useState<"calm" | "detailed">("calm");
+  const [baseMapStyle, setBaseMapStyle] = useState<"calm" | "detailed" | "google">("calm");
   const [streetViewBuddyPosition, setStreetViewBuddyPosition] = useState<LatLng | null>(null);
   const exploredPositions = useMemo(() => [
     ...exploredPositionsFor(exploredIds),
@@ -386,15 +387,18 @@ export default function WanderMap({
             </>
           )}
         </MapContainer>
+        {baseMapStyle === "google" && (
+          <GoogleMapBackground route={route} showRoute={showRoute} popularPlaces={popularPlaces} />
+        )}
         {!walkMode && (
           <button
             type="button"
             className="map-style-toggle"
-            onClick={() => setBaseMapStyle((current) => current === "calm" ? "detailed" : "calm")}
-            aria-label={`Switch to ${baseMapStyle === "calm" ? "detailed" : "calm"} map background`}
+            onClick={() => setBaseMapStyle((current) => current === "calm" ? "detailed" : current === "detailed" ? "google" : "calm")}
+            aria-label={`Current map background: ${baseMapStyle}. Switch map background`}
           >
-            <span aria-hidden="true">{baseMapStyle === "calm" ? "◫" : "◎"}</span>
-            {baseMapStyle === "calm" ? "Calm map" : "Detailed map"}
+            <span aria-hidden="true">{baseMapStyle === "calm" ? "◫" : baseMapStyle === "detailed" ? "◎" : "G"}</span>
+            {baseMapStyle === "calm" ? "Calm map" : baseMapStyle === "detailed" ? "Detailed map" : "Google map"}
           </button>
         )}
         {!walkMode && (
