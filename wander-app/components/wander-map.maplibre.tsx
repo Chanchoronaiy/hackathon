@@ -331,8 +331,7 @@ export default function WanderMap({
               </g>
             </mask>
           </defs>
-          <rect width="100%" height="100%" fill="rgba(58, 92, 48, 0.62)" mask="url(#wander-fog-mask)" />
-          <rect width="100%" height="100%" fill="rgba(216, 255, 100, 0.22)" mask="url(#wander-fog-mask)" />
+          <rect width="100%" height="100%" fill="#dcdbdf" fillOpacity={0.67} mask="url(#wander-fog-mask)" />
         </svg>
       )}
       <div className="map-caption">

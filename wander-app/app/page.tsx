@@ -771,7 +771,7 @@ export default function Home() {
         />
       )}
 
-      {plannerOpen && !fogActive && (
+      {plannerOpen && (
         <div className="planner-popup-backdrop">
           <button
             type="button"

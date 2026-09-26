@@ -317,17 +317,7 @@ export default function WanderMap({
               </g>
             </mask>
           </defs>
-          {walkMode ? (
-            <>
-              <rect width="100%" height="100%" fill="rgba(72, 64, 92, 0.42)" mask="url(#wander-fog-mask)" />
-              <rect width="100%" height="100%" fill="rgba(120, 118, 140, 0.22)" mask="url(#wander-fog-mask)" />
-            </>
-          ) : (
-            <>
-              <rect width="100%" height="100%" fill="rgba(48, 68, 40, 0.58)" mask="url(#wander-fog-mask)" />
-              <rect width="100%" height="100%" fill="rgba(155, 184, 122, 0.28)" mask="url(#wander-fog-mask)" />
-            </>
-          )}
+          <rect width="100%" height="100%" fill="#dcdbdf" fillOpacity={0.67} mask="url(#wander-fog-mask)" />
         </svg>
       )}
     </>
