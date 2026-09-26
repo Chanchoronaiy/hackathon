@@ -109,9 +109,7 @@ export default function DailyQuestsScreen({
             </div>
           )}
         </aside>
-      ) : (
-        <p className="quests-map-hint">Tap a numbered pin to open a daily quest.</p>
-      )}
+      ) : null}
 
       {streetViewQuest ? (
         <StreetViewDialog

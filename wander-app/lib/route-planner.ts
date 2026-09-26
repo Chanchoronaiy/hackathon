@@ -14,6 +14,10 @@ export type WanderPlanInput = {
   exploredIds?: string[];
   preferUnexplored?: boolean;
   weather?: Pick<WeatherSnapshot, "apparent" | "uvIndex"> | null;
+  /** Force this Adelaide place into the wander (e.g. daily quest Go). */
+  focusPlaceId?: string;
+  /** Custom searched destination (scenic stop along the way). */
+  focusDestination?: { name: string; position: LatLng };
 };
 
 export type RouteStop = AdelaidePlace & { why: string };
@@ -137,6 +141,8 @@ export function planWanderRoute({
   exploredIds = [],
   preferUnexplored = true,
   weather = null,
+  focusPlaceId,
+  focusDestination,
 }: WanderPlanInput): WanderRoute {
   const start = resolveStart(startPosition, startName);
   const explored = new Set(exploredIds);
@@ -155,6 +161,90 @@ export function planWanderRoute({
             : 8;
   const selectedInterests = new Set(interests as Interest[]);
   const detourWeight = minutes <= 30 ? 1.8 : minutes <= 60 ? 1.2 : minutes <= 90 ? 0.75 : 0.35;
+  const knownFocus = focusPlaceId
+    ? ADELAIDE_PLACES.find((place) => place.id === focusPlaceId) ?? null
+    : null;
+  const nearestKnown = focusDestination
+    ? ADELAIDE_PLACES
+      .map((place) => ({ place, distance: distanceKm(focusDestination.position, place.position) }))
+      .sort((a, b) => a.distance - b.distance)[0]
+    : null;
+  const focusPlace: AdelaidePlace | null = knownFocus ?? (
+    focusDestination
+      ? nearestKnown && nearestKnown.distance < 0.18
+        ? nearestKnown.place
+        : {
+            id: `search:${focusDestination.position.join(",")}`,
+            name: focusDestination.name,
+            category: "photo",
+            position: focusDestination.position,
+            reason: "Your searched destination",
+            surprise: 4,
+            comfort: 2,
+          }
+      : null
+  );
+
+  if (focusPlace && focusPlace.id !== start.id) {
+    const questStops: AdelaidePlace[] = [focusPlace];
+    const duration = estimatedMinutes(start, questStops);
+    const budget = Math.max(minutes, duration + 12);
+    const nearby = ADELAIDE_PLACES
+      .filter((place) => place.id !== focusPlace.id && place.id !== start.id && place.category !== "calm")
+      .map((place) => {
+        const viaStart = distanceKm(start.position, place.position);
+        const viaFocus = distanceKm(focusPlace.position, place.position);
+        const direct = distanceKm(start.position, focusPlace.position);
+        const scenic = place.surprise * 1.6 + (place.category === "green" || place.category === "photo" ? 2.5 : 0);
+        // Prefer places roughly between start and destination.
+        const corridor = viaStart + viaFocus - direct;
+        return {
+          place,
+          score: scenic - corridor * 3.2 - viaStart * 0.35,
+        };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    let stopsPlaces = questStops;
+    const scenicPicks: AdelaidePlace[] = [];
+    for (const candidate of nearby.slice(0, 10)) {
+      const trial = orderAsLoop(start, [...scenicPicks, focusPlace, candidate.place].filter(
+        (place, index, list) => list.findIndex((item) => item.id === place.id) === index,
+      ));
+      if (estimatedMinutes(start, trial) <= budget) {
+        scenicPicks.push(candidate.place);
+      }
+      if (scenicPicks.length >= Math.min(3, Math.max(1, Math.floor(budget / 25)))) break;
+    }
+    stopsPlaces = orderAsLoop(start, [...scenicPicks, focusPlace].filter(
+      (place, index, list) => list.findIndex((item) => item.id === place.id) === index,
+    ));
+    if (!stopsPlaces.some((place) => place.id === focusPlace.id)) {
+      stopsPlaces = [...stopsPlaces.filter((place) => place.id !== focusPlace.id), focusPlace];
+    }
+
+    const stops: RouteStop[] = stopsPlaces.map((place) => ({
+      ...place,
+      why: place.id === focusPlace.id
+        ? focusDestination
+          ? `${place.reason} Your searched stop.`
+          : `${place.reason} Daily quest stop.`
+        : explainStop(place, undefined, mode),
+    }));
+    const waypoints: LatLng[] = [start.position, ...stops.map((stop) => stop.position), start.position];
+    const distance = routeDistance(start, stopsPlaces);
+    return {
+      title: focusPlace.name,
+      stops,
+      geometry: gridLoopGeometry(waypoints),
+      distanceKm: distance,
+      walkingMinutes: estimatedMinutes(start, stopsPlaces),
+      shadeEstimate: estimateShade({ mode, stops: stopsPlaces, weather }),
+      start,
+      geometrySource: "grid",
+    };
+  }
+
   const candidates: ScoredPlace[] = ADELAIDE_PLACES
     .filter((place) => place.category !== "calm")
     .map((place) => {

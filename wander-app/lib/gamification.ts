@@ -109,14 +109,61 @@ export function completeDailyQuest(quest: DailyQuest): GamificationProfile {
   return awardPoints(quest.id, quest.points);
 }
 
-export function demoFriendsLeaderboard(userPoints: number): LeaderboardEntry[] {
+type DemoPerson = {
+  id: string;
+  name: string;
+  initials: string;
+  points: number;
+  friend?: boolean;
+};
+
+function demoRoster(userPoints: number): DemoPerson[] {
   return [
-    { id: "sam", name: "Sam P.", initials: "SP", points: 2140, scope: "friends" as const },
-    { id: "priya", name: "Priya K.", initials: "PK", points: 1680, scope: "friends" as const },
-    { id: "you", name: "You", initials: "AS", points: userPoints, scope: "friends" as const },
-    { id: "mia", name: "Mia L.", initials: "ML", points: 940, scope: "friends" as const },
-    { id: "tom", name: "Tom R.", initials: "TR", points: 720, scope: "friends" as const },
-  ].sort((a, b) => b.points - a.points);
+    { id: "nova", name: "Nova Chen", initials: "NC", points: 9820 },
+    { id: "rio", name: "Rio Alvarez", initials: "RA", points: 8640 },
+    { id: "hana", name: "Hana Park", initials: "HP", points: 7410 },
+    { id: "eli", name: "Eli Santos", initials: "ES", points: 6120 },
+    { id: "mira", name: "Mira Okonkwo", initials: "MO", points: 5280 },
+    { id: "finn", name: "Finn Blake", initials: "FB", points: 4610 },
+    { id: "yuki", name: "Yuki Sato", initials: "YS", points: 4020 },
+    { id: "lara", name: "Lara Mendes", initials: "LM", points: 3580 },
+    { id: "owen", name: "Owen Hart", initials: "OH", points: 3110 },
+    { id: "ivy", name: "Ivy Cho", initials: "IC", points: 2740 },
+    { id: "sam", name: "Sam P.", initials: "SP", points: 2140, friend: true },
+    { id: "nate", name: "Nate Cole", initials: "Na", points: 1980 },
+    { id: "priya", name: "Priya K.", initials: "PK", points: 1680, friend: true },
+    { id: "jordan", name: "Jordan W.", initials: "JW", points: 1420, friend: true },
+    { id: "kai", name: "Kai Moreau", initials: "KM", points: 1320, friend: true },
+    { id: "beau", name: "Beau Tran", initials: "BT", points: 1100 },
+    { id: "mia", name: "Mia L.", initials: "ML", points: 940, friend: true },
+    { id: "reed", name: "Reed Patel", initials: "RP", points: 780 },
+    { id: "tom", name: "Tom R.", initials: "TR", points: 720, friend: true },
+    { id: "zoe", name: "Zoe Quinn", initials: "ZQ", points: 610 },
+    { id: "aria", name: "Aria West", initials: "AW", points: 430 },
+    { id: "jun", name: "Jun Park", initials: "JP", points: 290 },
+    { id: "you", name: "You", initials: "AS", points: userPoints, friend: true },
+    { id: "leo", name: "Leo Frost", initials: "LF", points: Math.max(0, userPoints - 35) },
+  ];
+}
+
+function sortLeaderboard(entries: LeaderboardEntry[]) {
+  return [...entries].sort(
+    (a, b) => b.points - a.points || (a.id === "you" ? -1 : b.id === "you" ? 1 : 0),
+  );
+}
+
+export function demoFriendsLeaderboard(userPoints: number): LeaderboardEntry[] {
+  return sortLeaderboard(
+    demoRoster(userPoints)
+      .filter((person) => person.friend)
+      .map((person) => ({
+        id: person.id,
+        name: person.name,
+        initials: person.initials,
+        points: person.points,
+        scope: "friends" as const,
+      })),
+  );
 }
 
 /** @deprecated Prefer demoFriendsLeaderboard */
@@ -125,16 +172,21 @@ export function demoLeaderboard(userPoints: number) {
 }
 
 export function demoGlobalLeaderboard(userPoints: number): LeaderboardEntry[] {
-  return [
-    { id: "nova", name: "Nova Chen", initials: "NC", points: 9820, scope: "global" as const },
-    { id: "rio", name: "Rio Alvarez", initials: "RA", points: 8640, scope: "global" as const },
-    { id: "hana", name: "Hana Park", initials: "HP", points: 7410, scope: "global" as const },
-    { id: "eli", name: "Eli Santos", initials: "ES", points: 6120, scope: "global" as const },
-    { id: "sam-g", name: "Sam P.", initials: "SP", points: 2140, scope: "global" as const },
-    { id: "you", name: "You", initials: "AS", points: userPoints, scope: "global" as const },
-    { id: "priya-g", name: "Priya K.", initials: "PK", points: 1680, scope: "global" as const },
-    { id: "kai", name: "Kai Moreau", initials: "KM", points: 1320, scope: "global" as const },
-    { id: "mia-g", name: "Mia L.", initials: "ML", points: 940, scope: "global" as const },
-    { id: "zoe", name: "Zoe Quinn", initials: "ZQ", points: 610, scope: "global" as const },
-  ].sort((a, b) => b.points - a.points);
+  return sortLeaderboard(
+    demoRoster(userPoints).map((person) => ({
+      id: person.id,
+      name: person.name,
+      initials: person.initials,
+      points: person.points,
+      scope: "global" as const,
+    })),
+  );
+}
+
+export function leaderboardBand(rank: number) {
+  if (rank <= 0) return "band-rest";
+  if (rank <= 5) return "band-1";
+  if (rank <= 10) return "band-2";
+  if (rank <= 15) return "band-3";
+  return "band-rest";
 }

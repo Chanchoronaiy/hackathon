@@ -38,6 +38,8 @@ type Plan = {
   start?: LatLng;
   startName?: string;
   preferUnexplored?: boolean;
+  focusPlaceId?: string;
+  focusDestination?: { name: string; position: LatLng };
 };
 type LocationStatus = "locating" | "located" | "idle";
 
@@ -95,7 +97,6 @@ function YourWanderSheet({
           <X size={18} strokeWidth={2.4} />
         </button>
       </div>
-      <h2 className="wander-sheet-title">{route.title}</h2>
       <div className="wander-sheet-stats" aria-label="Route summary">
         <span>{route.distanceKm.toFixed(1)} km</span>
         <span>{route.walkingMinutes} min</span>
@@ -134,6 +135,10 @@ export default function Home() {
   const [start, setStart] = useState<LatLng | undefined>(undefined);
   const [startName, setStartName] = useState<string | undefined>(undefined);
   const [startQuery, setStartQuery] = useState("");
+  const [destinationQuery, setDestinationQuery] = useState("");
+  const [fromQuery, setFromQuery] = useState("");
+  const [pendingDestination, setPendingDestination] = useState<{ label: string; position: LatLng } | null>(null);
+  const [searchFromOpen, setSearchFromOpen] = useState(false);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>("locating");
   const startTouchedRef = useRef(false);
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
@@ -147,6 +152,7 @@ export default function Home() {
     walkingMinutes?: number;
   } | null>(null);
   const [fogActive, setFogActive] = useState(false);
+  const [friendsFogView, setFriendsFogView] = useState(false);
   const [explorationPercent, setExplorationPercent] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [plannerNotice, setPlannerNotice] = useState<string | null>(null);
@@ -235,6 +241,7 @@ export default function Home() {
     if (!navigator.geolocation) {
       setLocationStatus("idle");
       clearToVictoriaSquare(true);
+      setFromQuery("Victoria Square");
       return;
     }
     setLocationStatus("locating");
@@ -243,11 +250,13 @@ export default function Home() {
         const next: LatLng = [position.coords.latitude, position.coords.longitude];
         setLocationStatus("located");
         applyStart({ label: "Your location", position: next }, { fromUser: true });
+        setFromQuery("Your location");
       },
       () => {
         // Demo-friendly: keep Victoria Square quietly if the browser blocks us.
         setLocationStatus("idle");
         clearToVictoriaSquare(true);
+        setFromQuery("Victoria Square");
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60_000 },
     );
@@ -270,6 +279,7 @@ export default function Home() {
         const next: LatLng = [position.coords.latitude, position.coords.longitude];
         setLocationStatus("located");
         applyStart({ label: "Your location", position: next });
+        setFromQuery("Your location");
       },
       () => {
         if (!cancelled) setLocationStatus("idle");
@@ -425,46 +435,68 @@ export default function Home() {
     setLeaderboardOpen(false);
   }, []);
 
+  /** Drop a planned route that was never started as a walk. */
+  const clearUnusedRoute = useCallback(() => {
+    setWanderSheetOpen(false);
+    setActivePlan(null);
+    setOrsOverride(null);
+    setHeatEscapeOpen(false);
+  }, []);
+
   const openSavedScreen = useCallback((note?: string | null) => {
     setSaveNote(note ?? null);
     closeOverlayScreens();
+    clearUnusedRoute();
     setSavedOpen(true);
     setHomeTab("saved");
-    setWanderSheetOpen(false);
     setPlannerOpen(false);
     setFogActive(false);
-    setHeatEscapeOpen(false);
-  }, [closeOverlayScreens]);
+  }, [clearUnusedRoute, closeOverlayScreens]);
 
   const openExploreScreen = useCallback(() => {
     closeOverlayScreens();
+    clearUnusedRoute();
     setExploreOpen(true);
     setHomeTab("explore");
-    setWanderSheetOpen(false);
     setPlannerOpen(false);
     setFogActive(false);
-    setHeatEscapeOpen(false);
-  }, [closeOverlayScreens]);
+  }, [clearUnusedRoute, closeOverlayScreens]);
 
   const openMemoriesScreen = useCallback(() => {
     closeOverlayScreens();
+    clearUnusedRoute();
     setMemoriesOpen(true);
     setHomeTab("memories");
-    setWanderSheetOpen(false);
     setPlannerOpen(false);
     setFogActive(false);
-    setHeatEscapeOpen(false);
-  }, [closeOverlayScreens]);
+  }, [clearUnusedRoute, closeOverlayScreens]);
 
   const openFriendsScreen = useCallback(() => {
     closeOverlayScreens();
+    clearUnusedRoute();
+    setFriendsFogView(false);
     setFriendsOpen(true);
     setHomeTab("friends");
-    setWanderSheetOpen(false);
     setPlannerOpen(false);
     setFogActive(false);
-    setHeatEscapeOpen(false);
-  }, [closeOverlayScreens]);
+  }, [clearUnusedRoute, closeOverlayScreens]);
+
+  const openFriendsFog = useCallback(() => {
+    closeOverlayScreens();
+    clearUnusedRoute();
+    setFriendsFogView(true);
+    setFogActive(true);
+    setWalkingActive(false);
+    setPlannerOpen(false);
+    setHomeTab("friends");
+  }, [clearUnusedRoute, closeOverlayScreens]);
+
+  const closeFriendsFog = useCallback(() => {
+    setFriendsFogView(false);
+    setFogActive(false);
+    setFriendsOpen(true);
+    setHomeTab("friends");
+  }, []);
 
   const openQuestsScreen = useCallback(() => {
     if (questsOpen) {
@@ -473,32 +505,142 @@ export default function Home() {
       return;
     }
     closeOverlayScreens();
+    clearUnusedRoute();
     setQuestsOpen(true);
     setSelectedQuestId(null);
-    setWanderSheetOpen(false);
     setPlannerOpen(false);
     setFogActive(false);
-    setHeatEscapeOpen(false);
     setWalkingActive(false);
     setHomeTab("map");
-  }, [closeOverlayScreens, questsOpen]);
+  }, [clearUnusedRoute, closeOverlayScreens, questsOpen]);
 
   const openLeaderboardScreen = useCallback(() => {
     closeOverlayScreens();
+    clearUnusedRoute();
     setLeaderboardOpen(true);
-    setWanderSheetOpen(false);
     setPlannerOpen(false);
     setFogActive(false);
-    setHeatEscapeOpen(false);
     setWalkingActive(false);
-  }, [closeOverlayScreens]);
+  }, [clearUnusedRoute, closeOverlayScreens]);
+
+  const planScenicToDestination = useCallback((
+    destination: { label: string; position: LatLng },
+    origin: { label: string; position: LatLng },
+  ) => {
+    const metres = distanceMetres(origin.position, destination.position);
+    const minutes = Math.max(20, Math.min(90, Math.ceil((metres / 1000 / 4.8) * 60) * 2 + 18));
+    applyStart(origin, { fromUser: true });
+    setFromQuery(origin.label);
+    setDestinationQuery(destination.label);
+    setPendingDestination(null);
+    setSearchFromOpen(false);
+    applyPlan({
+      mode: "discover",
+      minutes,
+      interests: selected.length ? selected : ["art", "photo", "green"],
+      start: origin.position,
+      startName: origin.label,
+      preferUnexplored,
+      focusDestination: { name: destination.label, position: destination.position },
+    });
+  }, [applyPlan, applyStart, preferUnexplored, selected]);
+
+  const selectSearchDestination = useCallback((destination: { label: string; position: LatLng }) => {
+    setDestinationQuery(destination.label);
+    setPendingDestination(destination);
+    setSearchFromOpen(true);
+    clearUnusedRoute();
+  }, [clearUnusedRoute]);
+
+  const selectSearchFrom = useCallback((origin: { label: string; position: LatLng }) => {
+    applyStart(origin, { fromUser: true });
+    setFromQuery(origin.label);
+    if (pendingDestination) {
+      planScenicToDestination(pendingDestination, origin);
+    }
+  }, [applyStart, pendingDestination, planScenicToDestination]);
+
+  const useMyLocationForSearch = useCallback(() => {
+    setSearchFromOpen(true);
+    if (!navigator.geolocation) {
+      setLocationStatus("idle");
+      const origin = { label: "Victoria Square", position: START.position };
+      clearToVictoriaSquare(true);
+      setFromQuery(origin.label);
+      if (pendingDestination) planScenicToDestination(pendingDestination, origin);
+      return;
+    }
+    setLocationStatus("locating");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const next: LatLng = [position.coords.latitude, position.coords.longitude];
+        setLocationStatus("located");
+        const origin = { label: "Your location", position: next };
+        if (pendingDestination) {
+          planScenicToDestination(pendingDestination, origin);
+        } else {
+          applyStart(origin, { fromUser: true });
+          setFromQuery(origin.label);
+        }
+      },
+      () => {
+        setLocationStatus("idle");
+        const origin = { label: "Victoria Square", position: START.position };
+        clearToVictoriaSquare(true);
+        setFromQuery(origin.label);
+        if (pendingDestination) planScenicToDestination(pendingDestination, origin);
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60_000 },
+    );
+  }, [applyStart, clearToVictoriaSquare, pendingDestination, planScenicToDestination]);
 
   const goToDailyQuest = useCallback((quest: DailyQuest) => {
-    applyStart({ label: quest.place.name, position: quest.place.position }, { fromUser: true });
     setQuestsOpen(false);
     setSelectedQuestId(null);
+    setFriendsFogView(false);
+    setFogActive(false);
     setHomeTab("map");
-  }, [applyStart]);
+    setGenerating(true);
+
+    const launch = (position: LatLng, label: string) => {
+      applyStart({ label, position }, { fromUser: true });
+      const metres = distanceMetres(position, quest.place.position);
+      const minutes = Math.max(15, Math.min(90, Math.ceil((metres / 1000 / 4.8) * 60) * 2 + 10));
+      applyPlan({
+        mode: "discover",
+        minutes,
+        interests: [quest.place.category],
+        start: position,
+        startName: label,
+        preferUnexplored,
+        focusPlaceId: quest.place.id,
+      });
+    };
+
+    if (start) {
+      launch(start, startName?.trim() || "Your location");
+      return;
+    }
+
+    if (!navigator.geolocation) {
+      launch(START.position, "Victoria Square");
+      return;
+    }
+
+    setLocationStatus("locating");
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const next: LatLng = [position.coords.latitude, position.coords.longitude];
+        setLocationStatus("located");
+        launch(next, "Your location");
+      },
+      () => {
+        setLocationStatus("idle");
+        launch(START.position, "Victoria Square");
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60_000 },
+    );
+  }, [applyPlan, applyStart, preferUnexplored, start, startName]);
 
   const todaysQuests = useMemo(() => dailyQuests(), []);
   const questPins = useMemo(() => {
@@ -608,31 +750,37 @@ export default function Home() {
     questsOpen ? "quests-open" : "",
   ].filter(Boolean).join(" ");
 
-  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen && !leaderboardOpen;
-  const showHomeDock = !plannerOpen && !wanderSheetOpen && !walkingActive && !leaderboardOpen;
+  const friendsFogPercent = Math.min(
+    100,
+    Math.round(Math.max(explorationPercent, 0) + 18 + 9 + Math.min(explorationPercent, 12)),
+  );
+  const fogPercentLabel = friendsFogView ? friendsFogPercent : explorationPercent;
+
+  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen && !leaderboardOpen && !friendsFogView;
+  const showHomeDock = !plannerOpen && !wanderSheetOpen && !walkingActive && !leaderboardOpen && !friendsFogView;
   const tabScreenOpen = savedOpen || exploreOpen || memoriesOpen || friendsOpen || leaderboardOpen;
 
   function toggleFog() {
     if (fogActive) {
       setFogActive(false);
+      setFriendsFogView(false);
       setHomeTab("map");
       return;
     }
+    setFriendsFogView(false);
     setFogActive(true);
     setWalkingActive(false);
     setHomeTab("map");
     closeOverlayScreens();
+    clearUnusedRoute();
     setPlannerOpen(false);
-    setWanderSheetOpen(false);
-    setHeatEscapeOpen(false);
   }
 
   function openPlanner() {
     setPlannerOpen(true);
-    setWanderSheetOpen(false);
     setWalkingActive(false);
     closeOverlayScreens();
-    setHeatEscapeOpen(false);
+    clearUnusedRoute();
     setHomeTab("map");
   }
 
@@ -641,7 +789,7 @@ export default function Home() {
   }
 
   function closeWanderSheet() {
-    setWanderSheetOpen(false);
+    clearUnusedRoute();
   }
 
   function startWalk() {
@@ -659,9 +807,7 @@ export default function Home() {
     setWalkingActive(false);
     setWalkStopIndex(0);
     setWalkPosition(null);
-    setWanderSheetOpen(false);
-    setActivePlan(null);
-    setOrsOverride(null);
+    clearUnusedRoute();
     setCelebratingFinish(true);
     window.setTimeout(() => setCelebratingFinish(false), 1800);
   }
@@ -677,10 +823,11 @@ export default function Home() {
     setHomeTab(tab);
     if (tab === "map") {
       setFogActive(false);
+      setFriendsFogView(false);
       closeOverlayScreens();
       setPlannerOpen(false);
-      setWanderSheetOpen(false);
       setWalkingActive(false);
+      clearUnusedRoute();
       return;
     }
     if (tab === "explore") {
@@ -694,9 +841,9 @@ export default function Home() {
     if (tab === "saved") {
       setFogActive(false);
       closeOverlayScreens();
+      clearUnusedRoute();
       setSavedOpen(true);
       setPlannerOpen(false);
-      setWanderSheetOpen(false);
       setSaveNote(null);
       return;
     }
@@ -706,6 +853,7 @@ export default function Home() {
     }
     setFogActive(false);
     closeOverlayScreens();
+    clearUnusedRoute();
   }
 
   return (
@@ -747,25 +895,33 @@ export default function Home() {
             <div className="home-search">
               <StartSearch
                 variant="home"
-                placeholder="Search Adelaide"
-                ariaLabel="Search Adelaide"
-                value={startQuery}
+                placeholder="Search a place to wander to"
+                ariaLabel="Search destination"
+                value={destinationQuery}
                 onQueryChange={(query) => {
-                  setStartQuery(query);
-                  if (!query.trim()) {
-                    clearToVictoriaSquare(true);
-                    setLocationStatus("idle");
-                  }
+                  setDestinationQuery(query);
+                  if (!query.trim()) setSearchFromOpen(false);
                 }}
-                onSelect={(suggestion) => applyStart(suggestion, { fromUser: true })}
-                onUseMyLocation={useMyLocation}
+                onSelect={selectSearchDestination}
+                onUseMyLocation={useMyLocationForSearch}
                 locating={locationStatus === "locating"}
                 statusNote={null}
+                fromValue={fromQuery}
+                onFromQueryChange={setFromQuery}
+                onFromSelect={selectSearchFrom}
+                fromExpanded={searchFromOpen}
+                onFromExpandedChange={setSearchFromOpen}
+                onClearDestination={() => {
+                  setDestinationQuery("");
+                  setPendingDestination(null);
+                  clearUnusedRoute();
+                  setSearchFromOpen(false);
+                }}
               />
             </div>
           </header>
 
-      <aside className="home-rail" aria-label="Map controls">
+          <aside className="home-rail" aria-label="Map controls">
             <button
               type="button"
               className={`home-rail-chip${fogActive ? " is-on" : ""}`}
@@ -803,6 +959,23 @@ export default function Home() {
           <div className="home-explore-pill" aria-live="polite">
             <span className="home-explore-dot" aria-hidden="true" />
             <span>{explorationPercent.toFixed(0)}% explored</span>
+          </div>
+        </>
+      )}
+
+      {friendsFogView && (
+        <>
+          <button
+            type="button"
+            className="friends-fog-close"
+            aria-label="Close friends fog"
+            onClick={closeFriendsFog}
+          >
+            <X size={18} strokeWidth={2.4} />
+          </button>
+          <div className="home-explore-pill friends-fog-pill" aria-live="polite">
+            <span className="home-explore-dot" aria-hidden="true" />
+            <span>{fogPercentLabel.toFixed(0)}% friends fog</span>
           </div>
         </>
       )}
@@ -881,7 +1054,10 @@ export default function Home() {
       )}
 
       {friendsOpen && !fogActive && (
-        <FriendsScreen />
+        <FriendsScreen
+          friendsFogPercent={friendsFogPercent}
+          onOpenFriendsFog={openFriendsFog}
+        />
       )}
 
       {questsOpen && !fogActive && (
