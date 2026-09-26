@@ -34,7 +34,10 @@ export async function POST(request: Request) {
   }
 
   const coordinates = waypoints.map(([lat, lng]) => [lng, lat]);
-  const response = await fetch("https://api.heigit.org/v2/directions/foot-walking/geojson", {
+  // HeiGIT moved OpenRouteService behind the /openrouteservice path. Omitting
+  // this segment returns a 404, which made the client fall back to its visual
+  // grid and could draw lines through buildings.
+  const response = await fetch("https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson", {
     method: "POST",
     headers: {
       authorization: apiKey,

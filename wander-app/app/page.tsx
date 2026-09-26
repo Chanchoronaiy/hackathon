@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ChevronUp, Coffee, Compass, Eye, Leaf, MapPin, Palette, Sun, Trees, X } from "lucide-react";
+import { Bookmark, ChevronUp, Coffee, Compass, Eye, Leaf, MapPin, Palette, Sun, Trees, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
@@ -9,6 +9,7 @@ import { ADELAIDE_PLACES, START } from "@/lib/adelaide-data";
 import { markExplored, readExploredIds } from "@/lib/exploration";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
+import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
 import { fetchAdelaideWeather, type WeatherSnapshot } from "@/lib/weather";
 
 const WanderMap = dynamic(() => import("@/components/wander-map"), {
@@ -105,9 +106,6 @@ function AboutRoute({
               );
             })}
           </ol>
-          {route.shadeEstimate != null && (
-            <p className="about-shade">Estimated shade {route.shadeEstimate}% · comfort attributes + modelled weather · not live sensing</p>
-          )}
         </div>
       )}
     </aside>
@@ -133,6 +131,12 @@ export default function Home() {
   const [explorationPercent, setExplorationPercent] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [heatEscapeOpen, setHeatEscapeOpen] = useState(false);
+  const [heatEscape, setHeatEscape] = useState<{ shade: number; coolerMinutes: number } | null>(null);
+  const [brandMenuOpen, setBrandMenuOpen] = useState(false);
+  const [savedOpen, setSavedOpen] = useState(false);
+  const [savedTrials, setSavedTrials] = useState<SavedTrial[]>([]);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
 
   const totalMinutes = wanderHours * 60 + wanderMinutes;
   const planMinutes = Math.max(5, Math.min(180, totalMinutes || 0));
@@ -248,15 +252,29 @@ export default function Home() {
     if (!nextPlan && totalMinutes < 1) return;
     setGenerating(true);
     const plan = nextPlan ?? { mode, minutes: planMinutes, interests: selected, start, startName };
+    const preview = planWanderRoute({
+      ...plan,
+      exploredIds,
+      weather,
+    });
     const frame = requestAnimationFrame(() => {
       setActivePlan(plan);
       setCalmOpen(false);
       setFogActive(false);
       setAboutOpen(false);
       setGenerating(false);
+      if (plan.mode === "heat" && preview.shadeEstimate != null) {
+        setHeatEscape({
+          shade: preview.shadeEstimate,
+          coolerMinutes: Math.max(1, Math.round(preview.walkingMinutes * (preview.shadeEstimate / 100))),
+        });
+        setHeatEscapeOpen(true);
+      } else {
+        setHeatEscapeOpen(false);
+      }
     });
     void frame;
-  }, [mode, planMinutes, selected, start, startName, totalMinutes]);
+  }, [exploredIds, mode, planMinutes, selected, start, startName, totalMinutes, weather]);
 
   const handleExploreStop = useCallback((id: string) => {
     setExploredIds(markExplored(id));
@@ -265,6 +283,7 @@ export default function Home() {
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       setExploredIds(readExploredIds());
+      setSavedTrials(readSavedTrials());
     });
     return () => cancelAnimationFrame(frame);
   }, []);
@@ -325,6 +344,61 @@ export default function Home() {
     return () => lifecycle.abort();
   }, [applyPlan, start, startName]);
 
+  const openSavedTrials = useCallback(() => {
+    setSavedOpen(true);
+    setBrandMenuOpen(false);
+    setCalmOpen(false);
+    setHeatEscapeOpen(false);
+    setSaveNote(null);
+  }, []);
+
+  const handleSaveTrial = useCallback(() => {
+    if (!hasRoute || !activePlan) {
+      setSaveNote("Generate a wander first, then save it.");
+      openSavedTrials();
+      return;
+    }
+    const next = saveTrial({
+      mode: activePlan.mode,
+      minutes: activePlan.minutes,
+      interests: activePlan.interests,
+      start: activePlan.start,
+      startName: activePlan.startName,
+      stopNames: route.stops.map((stop) => stop.name),
+      walkingMinutes: route.walkingMinutes,
+      distanceKm: route.distanceKm,
+    });
+    setSavedTrials(next);
+    setSaveNote("Wander saved.");
+    openSavedTrials();
+  }, [activePlan, hasRoute, openSavedTrials, route.distanceKm, route.stops, route.walkingMinutes]);
+
+  const restoreTrial = useCallback((trial: SavedTrial) => {
+    const nextMinutes = Math.max(5, Math.min(180, Math.round(trial.minutes)));
+    setMode(trial.mode);
+    setWanderHours(Math.floor(nextMinutes / 60));
+    setWanderMinutes(nextMinutes % 60);
+    setSelected(trial.interests);
+    if (trial.start) {
+      applyStart({
+        label: trial.startName ?? "Saved start",
+        position: trial.start,
+      }, { fromUser: true });
+    } else {
+      clearToVictoriaSquare(true);
+    }
+    applyPlan({
+      mode: trial.mode,
+      minutes: nextMinutes,
+      interests: trial.interests,
+      start: trial.start,
+      startName: trial.startName,
+    });
+    setSavedOpen(false);
+    setBrandMenuOpen(false);
+    setSaveNote(null);
+  }, [applyPlan, applyStart, clearToVictoriaSquare]);
+
   function toggleInterest(id: string) {
     setSelected((current) => current.includes(id)
       ? current.filter((item) => item !== id)
@@ -348,8 +422,48 @@ export default function Home() {
         onExplorationPercent={setExplorationPercent}
       />
       <header className="topbar">
-        <div className="brand" aria-label="Wander home">
-          <span className="brand-mark"><Compass size={19} strokeWidth={2.4} /></span><span>Wander</span>
+        <div className={`brand-menu${brandMenuOpen ? " is-open" : ""}`}>
+          <button
+            type="button"
+            className="brand-mark"
+            aria-label="Open Wander menu"
+            aria-expanded={brandMenuOpen}
+            onClick={() => {
+              setBrandMenuOpen((open) => !open);
+              setSavedOpen(false);
+            }}
+          >
+            <Compass size={19} strokeWidth={2.4} />
+          </button>
+          {brandMenuOpen && (
+            <div className="brand-menu-actions">
+              <button
+                type="button"
+                className="brand-action"
+                aria-label="Saved trials"
+                onClick={openSavedTrials}
+              >
+                <Bookmark size={18} />
+                <span>Save</span>
+              </button>
+              <button
+                type="button"
+                className={`brand-action${fogActive ? " active" : ""}`}
+                aria-pressed={fogActive}
+                aria-label={fogActive ? "Exit exploration fog view" : "Explore unexplored areas on the map"}
+                onClick={() => {
+                  setFogActive((open) => !open);
+                  setCalmOpen(false);
+                  setBrandMenuOpen(false);
+                  setSavedOpen(false);
+                  setHeatEscapeOpen(false);
+                }}
+              >
+                {fogActive ? <X size={18} /> : <Eye size={18} />}
+                <span>{fogActive ? "Exit" : "Explore"}</span>
+              </button>
+            </div>
+          )}
         </div>
         {fogActive ? (
           <div className="explore-pill" aria-live="polite" aria-label="Exploration of the current map view">
@@ -365,6 +479,49 @@ export default function Home() {
           </div>
         )}
       </header>
+
+      {savedOpen && !fogActive && (
+        <aside className="saved-panel" aria-live="polite">
+          <div className="saved-panel-head">
+            <strong>Saved trials</strong>
+            <button type="button" aria-label="Close saved trials" onClick={() => setSavedOpen(false)}>
+              <X size={17} />
+            </button>
+          </div>
+          {saveNote ? <p className="saved-note">{saveNote}</p> : null}
+          {hasRoute ? (
+            <button type="button" className="saved-current" onClick={handleSaveTrial}>
+              Save current wander
+            </button>
+          ) : null}
+          {savedTrials.length === 0 ? (
+            <p className="saved-empty">No saved wanders yet. Generate a loop, then save it here.</p>
+          ) : (
+            <ul className="saved-list">
+              {savedTrials.map((trial) => (
+                <li key={trial.id}>
+                  <button type="button" className="saved-item" onClick={() => restoreTrial(trial)}>
+                    <span className="saved-item-title">
+                      {trial.mode === "heat" ? "Beat the heat" : "Discover"} · {trial.walkingMinutes} min
+                    </span>
+                    <span className="saved-item-meta">
+                      {trial.distanceKm.toFixed(1)} km · {trial.stopNames.slice(0, 3).join(", ") || "No stops"}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="saved-delete"
+                    aria-label="Delete saved trial"
+                    onClick={() => setSavedTrials(deleteSavedTrial(trial.id))}
+                  >
+                    <X size={14} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </aside>
+      )}
 
       <div className="left-stack" hidden={fogActive}>
         <section className="planner" aria-label="Wander planner">
@@ -415,22 +572,14 @@ export default function Home() {
             </fieldset>
           </div>
 
-          {mode === "discover" ? (
-            <div className="interest-block"><span className="field-label">Make it more you</span><div className="chips">
-              {interests.map(({ id, label, icon: Icon }) => (
-                <button key={id} type="button" aria-pressed={selected.includes(id)} className={selected.includes(id) ? "selected" : ""} onClick={() => toggleInterest(id)}><Icon size={15} /> {label}</button>
-              ))}
-            </div></div>
-          ) : (
-            <p className="heat-note">
-              Favours comfort using modelled weather and estimated shade from cached place attributes — not live street sensors
-              {weather ? ` · updated ${weather.time} · UV ${weather.uvIndex} · wind ${weather.windSpeed} km/h` : " · updating weather…"}
-              {weather ? ` · ${weather.precipitationProbability}% rain chance this hour.` : ""}
-            </p>
-          )}
+          <div className="interest-block"><span className="field-label">Make it more you</span><div className="chips">
+            {interests.map(({ id, label, icon: Icon }) => (
+              <button key={id} type="button" aria-pressed={selected.includes(id)} className={selected.includes(id) ? "selected" : ""} onClick={() => toggleInterest(id)}><Icon size={15} /> {label}</button>
+            ))}
+          </div></div>
 
           <button className="generate" type="button" disabled={generating || totalMinutes < 1} onClick={() => applyPlan()}>
-            <span>{generating ? "Drawing loop…" : mode === "discover" ? "Find my wander" : "Find a cooler walk"}</span>
+            <span>{generating ? "Drawing loop…" : "Find my wander"}</span>
             <span aria-hidden="true">{generating ? "…" : "→"}</span>
           </button>
         </section>
@@ -444,19 +593,21 @@ export default function Home() {
         />
       </div>
       <div className="map-actions">
-        <button
-          className={`explore-button${fogActive ? " active" : ""}`}
-          type="button"
-          aria-pressed={fogActive}
-          aria-label={fogActive ? "Exit exploration fog view" : "Show explored areas on the map"}
-          onClick={() => { setFogActive((open) => !open); setCalmOpen(false); }}
-        >
-          {fogActive ? <X size={18} /> : <Eye size={18} />}
-          <span>{fogActive ? "Exit fog" : "Explore map"}</span>
-        </button>
         {!fogActive && (
           <button className="calm-button" type="button" aria-label="Find a curated calm spot" onClick={() => setCalmOpen(true)}>
             <span className="calm-pulse" /> Calm spot
+          </button>
+        )}
+        {fogActive && (
+          <button
+            className="explore-button active"
+            type="button"
+            aria-pressed
+            aria-label="Exit exploration fog view"
+            onClick={() => setFogActive(false)}
+          >
+            <X size={18} />
+            <span>Exit fog</span>
           </button>
         )}
       </div>
@@ -470,6 +621,32 @@ export default function Home() {
             {calmSpot.openingHours ? ` ${calmSpot.openingHours}.` : " Opening hours unverified."}
           </p>
         </aside>
+      )}
+      {heatEscapeOpen && heatEscape && !fogActive && (
+        <div className="heat-escape-backdrop">
+          <button
+            type="button"
+            className="heat-escape-scrim"
+            aria-label="Dismiss sunshine escape"
+            onClick={() => setHeatEscapeOpen(false)}
+          />
+          <dialog
+            className="heat-escape-card"
+            open
+            aria-labelledby="heat-escape-title"
+          >
+            <button type="button" aria-label="Close sunshine escape" onClick={() => setHeatEscapeOpen(false)}>
+              <X size={17} />
+            </button>
+            <span className="heat-escape-kicker"><Sun size={14} /> Beat the heat</span>
+            <strong id="heat-escape-title">You escaped about {heatEscape.shade}% of the harsh sunshine</strong>
+            <p>
+              That’s roughly {heatEscape.coolerMinutes} cooler minutes on this walk
+              {weather ? ` · UV ${weather.uvIndex} · feels like ${weather.apparent}°` : ""}.
+              Estimated from comfort attributes and modelled weather — not live street sensors.
+            </p>
+          </dialog>
+        </div>
       )}
     </main>
   );
