@@ -1,7 +1,9 @@
 "use client";
 
-import { ExternalLink, X } from "lucide-react";
+import { ExternalLink, LoaderCircle, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { LatLng } from "@/lib/route-planner";
+import styles from "@/components/street-view-dialog.module.css";
 
 export default function StreetViewDialog({
   name,
@@ -17,6 +19,11 @@ export default function StreetViewDialog({
   const source = key
     ? `https://www.google.com/maps/embed/v1/streetview?key=${encodeURIComponent(key)}&location=${encodeURIComponent(location)}&fov=80`
     : null;
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    setLoaded(false);
+  }, [source]);
 
   return (
     <div className="streetview-backdrop" role="presentation">
@@ -30,13 +37,25 @@ export default function StreetViewDialog({
           <button type="button" aria-label="Close Street View" onClick={onClose}><X size={19} /></button>
         </header>
         {source ? (
-          <iframe
-            title={`Google Street View of ${name}`}
-            src={source}
-            loading="lazy"
-            allowFullScreen
-            referrerPolicy="strict-origin-when-cross-origin"
-          />
+          <div className={styles.frameWrap}>
+            {!loaded && (
+              <div className={styles.loading} aria-live="polite">
+                <span className={styles.buddy} aria-hidden="true">👋</span>
+                <LoaderCircle size={22} className={styles.spinner} aria-hidden="true" />
+                <strong>Looking around…</strong>
+                <p>Loading the view from this point.</p>
+              </div>
+            )}
+            <iframe
+              title={`Google Street View of ${name}`}
+              src={source}
+              loading="eager"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+              className={loaded ? styles.loaded : ""}
+              onLoad={() => setLoaded(true)}
+            />
+          </div>
         ) : (
           <div className="streetview-empty">
             <ExternalLink size={28} aria-hidden="true" />
