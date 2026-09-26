@@ -27,7 +27,6 @@ export const START: AdelaidePlace = {
 export const ADELAIDE_PLACES: AdelaidePlace[] = [
   { id: "captain-sturt", name: "Captain Charles Sturt", category: "art", position: [-34.92734, 138.59944], reason: "A bronze figure hiding beside the square", surprise: 4, comfort: 1 },
   { id: "rundle-lantern", name: "Rundle Lantern", category: "art", position: [-34.92278, 138.60572], reason: "A glowing city-scale artwork", surprise: 4, comfort: 1 },
-  { id: "pigeon", name: "Pigeon", category: "art", position: [-34.92299, 138.60184], reason: "Adelaide's oversized laneway local", surprise: 5, comfort: 1 },
   { id: "arlos", name: "Arlo's", category: "coffee", position: [-34.92453, 138.59987], reason: "A small coffee pause on King William Street", surprise: 2, comfort: 2 },
   { id: "elementary", name: "Elementary Coffee", category: "coffee", position: [-34.92655, 138.59596], reason: "A tucked-away west-end coffee stop", surprise: 3, comfort: 2, openingHours: "Mo–Fr 07:30–15:00" },
   { id: "part-time-lover", name: "Part-Time Lover", category: "coffee", position: [-34.92633, 138.60062], reason: "A playful courtyard detour", surprise: 4, comfort: 2 },

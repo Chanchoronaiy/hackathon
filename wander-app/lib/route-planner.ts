@@ -130,7 +130,19 @@ export function planWanderRoute({
 }: WanderPlanInput): WanderRoute {
   const start = resolveStart(startPosition, startName);
   const explored = new Set(exploredIds);
-  const targetStops = minutes === 15 ? 2 : minutes === 45 ? 5 : 4;
+  // More available time should produce a meaningfully longer wander. The old
+  // fixed count made 60+ minute selections look almost identical to 30 mins.
+  const targetStops = minutes <= 15
+    ? 2
+    : minutes <= 30
+      ? 4
+      : minutes <= 45
+        ? 5
+        : minutes <= 60
+          ? 6
+          : minutes <= 90
+            ? 7
+            : 8;
   const selectedInterests = new Set(interests as Interest[]);
   const candidates: ScoredPlace[] = ADELAIDE_PLACES
     .filter((place) => place.category !== "calm")
