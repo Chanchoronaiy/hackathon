@@ -1,0 +1,4 @@
+osmnx>=1.9
+networkx>=3.0
+folium>=0.15
+astral>=3.2
