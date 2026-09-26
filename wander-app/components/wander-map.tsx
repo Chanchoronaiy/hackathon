@@ -39,7 +39,7 @@ function CreamWash() {
       bounds={[[-85, -180], [85, 180]]}
       pathOptions={{
         stroke: false,
-        fillColor: "#fff9d6",
+        fillColor: "#fffdf2",
         fillOpacity: 0.22,
         interactive: false,
         pane: "wander-cream",
@@ -149,7 +149,7 @@ function StopMarker({
       radius={explored ? 9 : 8}
       pathOptions={{
         color: "#0f1210",
-        fillColor: explored ? "#fff9d6" : colour,
+        fillColor: explored ? "#fffdf2" : colour,
         fillOpacity: 1,
         weight: 3,
         opacity: 0.95,

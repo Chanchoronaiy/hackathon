@@ -153,7 +153,7 @@ function ensureRouteLayers(map: MapLibreMap, colour: string, fogActive: boolean)
         "circle-color": [
           "case",
           ["get", "explored"],
-          "#fff9d6",
+          "#fffdf2",
           ["get", "colour"],
         ],
       },

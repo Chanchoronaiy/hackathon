@@ -784,6 +784,11 @@ export default function Home() {
             open
             aria-label="Wander planner"
           >
+            <div className="planner-popup-top">
+              <button type="button" className="wander-sheet-close planner-popup-close" aria-label="Close planner" onClick={closePlanner}>
+                <X size={20} strokeWidth={2.4} />
+              </button>
+            </div>
             <div className="planner-popup-stack">
               <section className="planner" aria-label="Wander planner">
                 <StartSearch
