@@ -1,11 +1,11 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Bookmark, ChevronUp, Cloud, Coffee, Compass, Leaf, MapPin, Palette, Sun, Trees, X } from "lucide-react";
+import { Bookmark, ChevronUp, Cloud, Coffee, Compass, Leaf, Palette, Sun, Trees, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
-import { ADELAIDE_PLACES, START } from "@/lib/adelaide-data";
+import { START } from "@/lib/adelaide-data";
 import { markExplored, readExploredIds } from "@/lib/exploration";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
@@ -38,8 +38,6 @@ const interests = [
   { id: "coffee", label: "Coffee", icon: Coffee },
   { id: "green", label: "Green space", icon: Trees },
 ];
-
-const calmSpot = ADELAIDE_PLACES.find((place) => place.id === "city-library") ?? ADELAIDE_PLACES[0];
 
 function walkMinutesBetween(a: LatLng, b: LatLng) {
   const latitudeKm = (a[0] - b[0]) * 111;
@@ -124,7 +122,6 @@ export default function Home() {
   const startTouchedRef = useRef(false);
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
-  const [calmOpen, setCalmOpen] = useState(false);
   const [exploredIds, setExploredIds] = useState<string[]>([]);
   const [orsOverride, setOrsOverride] = useState<{ key: string; geometry: LatLng[] } | null>(null);
   const [fogActive, setFogActive] = useState(false);
@@ -259,7 +256,6 @@ export default function Home() {
     });
     const frame = requestAnimationFrame(() => {
       setActivePlan(plan);
-      setCalmOpen(false);
       setFogActive(false);
       setAboutOpen(false);
       setGenerating(false);
@@ -345,11 +341,7 @@ export default function Home() {
   }, [applyPlan, start, startName]);
 
   const openSavedTrials = useCallback(() => {
-    setSavedOpen(true);
-    setBrandMenuOpen(false);
-    setCalmOpen(false);
-    setHeatEscapeOpen(false);
-    setSaveNote(null);
+    window.location.assign("/saved");
   }, []);
 
   const handleSaveTrial = useCallback(() => {
@@ -369,7 +361,6 @@ export default function Home() {
       distanceKm: route.distanceKm,
     });
     setSavedTrials(next);
-    setSaveNote("Wander saved.");
     openSavedTrials();
   }, [activePlan, hasRoute, openSavedTrials, route.distanceKm, route.stops, route.walkingMinutes]);
 
@@ -440,8 +431,8 @@ export default function Home() {
               <button
                 type="button"
                 className="brand-action"
-                aria-label="Saved trials"
-                onClick={openSavedTrials}
+                aria-label="Save current wander and open saved trials"
+                onClick={handleSaveTrial}
               >
                 <Bookmark size={18} />
                 <span>Save</span>
@@ -453,7 +444,6 @@ export default function Home() {
                 aria-label={fogActive ? "Exit exploration fog view" : "Explore unexplored areas on the map"}
                 onClick={() => {
                   setFogActive((open) => !open);
-                  setCalmOpen(false);
                   setBrandMenuOpen(false);
                   setSavedOpen(false);
                   setHeatEscapeOpen(false);
@@ -593,11 +583,6 @@ export default function Home() {
         />
       </div>
       <div className="map-actions">
-        {!fogActive && (
-          <button className="calm-button" type="button" aria-label="Find a curated calm spot" onClick={() => setCalmOpen(true)}>
-            <span className="calm-pulse" /> Calm spot
-          </button>
-        )}
         {fogActive && (
           <button
             className="explore-button active"
@@ -611,17 +596,6 @@ export default function Home() {
           </button>
         )}
       </div>
-      {calmOpen && !fogActive && (
-        <aside className="calm-card" aria-live="polite">
-          <button type="button" aria-label="Close calm spot" onClick={() => setCalmOpen(false)}><X size={17} /></button>
-          <span className="calm-kicker"><MapPin size={14} /> Curated calm spot · not from your loop</span>
-          <strong>{calmSpot.name}</strong>
-          <p>
-            {calmSpot.reason}. Quiet/calm attributes are curated, not measured live.
-            {calmSpot.openingHours ? ` ${calmSpot.openingHours}.` : " Opening hours unverified."}
-          </p>
-        </aside>
-      )}
       {heatEscapeOpen && heatEscape && !fogActive && (
         <div className="heat-escape-backdrop">
           <button
