@@ -1,16 +1,30 @@
 "use client";
 
-import { ArrowLeft, Camera, Check, CornerUpRight, Share } from "lucide-react";
+import { ArrowLeft, Camera, Check, CornerUpRight, Images, Share, Shuffle, X } from "lucide-react";
+import Image from "next/image";
+import { useState } from "react";
+import type { HistoryImagePair } from "@/lib/history-sites";
 import type { WanderRoute } from "@/lib/route-planner";
 
 type WalkModeChromeProps = {
   route: WanderRoute;
   currentStopIndex: number;
   locationStatus: "locating" | "located" | "unavailable";
+  historyMoment: {
+    siteName: string;
+    fact: string;
+    facts?: string[];
+    factIndex?: number;
+    beforeAfter?: HistoryImagePair;
+    sourceLabel?: string;
+    sourceUrl?: string;
+  } | null;
   explorationPercent: number;
   onBack: () => void;
   onShare: () => void;
   onCapture: () => void;
+  onDismissHistoryMoment: () => void;
+  onAnotherFact: () => void;
   onAdvance?: () => void;
 };
 
@@ -39,12 +53,16 @@ export default function WalkModeChrome({
   route,
   currentStopIndex,
   locationStatus,
+  historyMoment,
   explorationPercent,
   onBack,
   onShare,
   onCapture,
+  onDismissHistoryMoment,
+  onAnotherFact,
   onAdvance,
 }: WalkModeChromeProps) {
+  const [photoComparisonOpen, setPhotoComparisonOpen] = useState(false);
   const totalStops = route.stops.length;
   const done = totalStops === 0 || currentStopIndex >= totalStops;
   const nextStop = done ? null : route.stops[currentStopIndex];
@@ -88,6 +106,69 @@ export default function WalkModeChrome({
             : "Live location unavailable. Check browser location permission; progress is estimated."}
       </p>
 
+      {historyMoment ? (
+        <aside className="walk-history-toast" aria-live="polite" aria-label={`${historyMoment.sourceUrl ? "Local history" : "Wander note"} at ${historyMoment.siteName}`}>
+          <div className="walk-history-toast-head">
+            <span>{historyMoment.sourceUrl ? "A little local history" : "A note for your wander"} · {historyMoment.siteName}</span>
+            <button type="button" aria-label="Dismiss history fact" onClick={onDismissHistoryMoment}>
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+          <p>{historyMoment.fact}</p>
+          {historyMoment.beforeAfter ? (
+            <button type="button" className="walk-history-compare-trigger" onClick={() => setPhotoComparisonOpen(true)}>
+              <Images size={16} aria-hidden="true" /> View before &amp; after photos
+            </button>
+          ) : null}
+          {historyMoment.sourceUrl && historyMoment.sourceLabel ? (
+            <a href={historyMoment.sourceUrl} target="_blank" rel="noreferrer">Source: {historyMoment.sourceLabel}</a>
+          ) : (
+            <span className="walk-history-source">From the curated Adelaide place guide</span>
+          )}
+          {historyMoment.facts && historyMoment.facts.length > 1 ? (
+            <button type="button" className="walk-history-another" onClick={onAnotherFact}>
+              <Shuffle size={14} aria-hidden="true" /> Another fact
+            </button>
+          ) : null}
+        </aside>
+      ) : null}
+
+      {photoComparisonOpen && historyMoment?.beforeAfter ? (
+        <div className="walk-photo-comparison-backdrop">
+          <button
+            type="button"
+            className="walk-photo-comparison-scrim"
+            aria-label="Close photo comparison"
+            onClick={() => setPhotoComparisonOpen(false)}
+          />
+          <dialog open className="walk-photo-comparison" aria-labelledby="walk-photo-comparison-title">
+            <header>
+              <div>
+                <span>Before &amp; after</span>
+                <h2 id="walk-photo-comparison-title">{historyMoment.siteName}</h2>
+              </div>
+              <button type="button" aria-label="Close photo comparison" onClick={() => setPhotoComparisonOpen(false)}>
+                <X size={20} aria-hidden="true" />
+              </button>
+            </header>
+            <div className="walk-history-comparison">
+              {[historyMoment.beforeAfter.before, historyMoment.beforeAfter.after].map((photo, index) => (
+                <figure key={photo.url} className="walk-history-photo">
+                  <div className="walk-history-photo-image">
+                    <Image src={photo.url} alt={photo.label} fill sizes="(max-width: 600px) 90vw, 45vw" unoptimized />
+                    <span>{index === 0 ? "BEFORE" : "AFTER"}</span>
+                  </div>
+                  <figcaption>
+                    <strong>{photo.label}</strong>
+                    <a href={photo.sourceUrl} target="_blank" rel="noreferrer">{photo.credit}</a>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </dialog>
+        </div>
+      ) : null}
+
       <button type="button" className="walk-capture" onClick={onCapture}>
         <Camera size={22} strokeWidth={2.2} aria-hidden="true" />
         <span>Capture</span>
@@ -105,10 +186,11 @@ export default function WalkModeChrome({
             <button
               type="button"
               className="walk-next-turn"
-              aria-label={`Reached checkpoint ${nextNumber}`}
+              aria-label={`Next stop: ${nextStop.name}`}
               onClick={onAdvance}
             >
               <CornerUpRight size={22} strokeWidth={2.4} />
+              <span>Next</span>
             </button>
           </div>
         </aside>

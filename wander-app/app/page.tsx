@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ArrowLeft, Bookmark, CalendarDays, Camera, Cloud, Coffee, Compass, Leaf, Map, Palette, Sun, Trees, Users, X } from "lucide-react";
+import { ArrowLeft, BookOpen, Bookmark, CalendarDays, Camera, Cloud, Coffee, Compass, Leaf, Map, Palette, Sun, Trees, Users, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ExploreScreen, { type ExploreSuggestion } from "@/components/explore-screen";
 import FriendsScreen from "@/components/friends-screen";
@@ -12,6 +12,7 @@ import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
+import { HISTORY_SITES, type HistoryImagePair } from "@/lib/history-sites";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
@@ -29,6 +30,15 @@ const WanderMap = dynamic(() => import("@/components/wander-map"), {
 
 type Mode = "discover" | "heat";
 type WalkLocationStatus = "locating" | "located" | "unavailable";
+type WalkHistoryMoment = {
+  siteName: string;
+  fact: string;
+  facts?: string[];
+  factIndex?: number;
+  beforeAfter?: HistoryImagePair;
+  sourceLabel?: string;
+  sourceUrl?: string;
+};
 type Plan = {
   mode: Mode;
   minutes: number;
@@ -126,6 +136,8 @@ function YourWanderSheet({
 export default function Home() {
   const walkStartedAtRef = useRef<string | null>(null);
   const walkCapturesRef = useRef<WalkCapture[]>([]);
+  const seenWalkHistorySitesRef = useRef(new Set<string>());
+  const seenWalkStopsRef = useRef(new Set<string>());
   const [mode, setMode] = useState<Mode>("discover");
   const [wanderHours, setWanderHours] = useState(0);
   const [wanderMinutes, setWanderMinutes] = useState(15);
@@ -148,11 +160,13 @@ export default function Home() {
     walkingMinutes?: number;
   } | null>(null);
   const [fogActive, setFogActive] = useState(false);
+  const [historyLayer, setHistoryLayer] = useState(false);
   const [explorationPercent, setExplorationPercent] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [wanderSheetOpen, setWanderSheetOpen] = useState(false);
   const [walkingActive, setWalkingActive] = useState(false);
   const [walkLocationStatus, setWalkLocationStatus] = useState<WalkLocationStatus>("locating");
+  const [walkHistoryMoment, setWalkHistoryMoment] = useState<WalkHistoryMoment | null>(null);
   const [walkStopIndex, setWalkStopIndex] = useState(0);
   const [walkPosition, setWalkPosition] = useState<LatLng | null>(null);
   const [heatEscapeOpen, setHeatEscapeOpen] = useState(false);
@@ -314,6 +328,19 @@ export default function Home() {
     setExploredIds(markExplored(id));
   }, []);
 
+  const dismissWalkHistoryMoment = useCallback(() => {
+    setWalkHistoryMoment(null);
+  }, []);
+
+  const showAnotherWalkFact = useCallback(() => {
+    setWalkHistoryMoment((current) => {
+      if (!current?.facts || current.facts.length < 2) return current;
+      const options = current.facts.map((_, index) => index).filter((index) => index !== current.factIndex);
+      const factIndex = options[Math.floor(Math.random() * options.length)];
+      return { ...current, factIndex, fact: current.facts[factIndex] };
+    });
+  }, []);
+
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       setExploredIds(readExploredIds());
@@ -332,8 +359,39 @@ export default function Home() {
         setWalkPosition(next);
         setExploredTrail(recordExploredPosition(next));
 
+        const nearbyHistorySite = HISTORY_SITES.find((site) => (
+          !seenWalkHistorySitesRef.current.has(site.id)
+          && distanceMetres(next, site.position) <= 350
+        ));
+        if (nearbyHistorySite) {
+          seenWalkHistorySitesRef.current.add(nearbyHistorySite.id);
+          const fact = nearbyHistorySite.facts[Math.floor(Math.random() * nearbyHistorySite.facts.length)];
+          setWalkHistoryMoment({
+            siteName: nearbyHistorySite.name,
+            fact,
+            facts: nearbyHistorySite.facts,
+            factIndex: nearbyHistorySite.facts.indexOf(fact),
+            beforeAfter: nearbyHistorySite.beforeAfter,
+            sourceLabel: nearbyHistorySite.sourceLabel,
+            sourceUrl: nearbyHistorySite.sourceUrl,
+          });
+        }
+
         const nextStop = route.stops[walkStopIndex];
-        if (nextStop && distanceMetres(next, nextStop.position) <= 45) {
+        const arrivalRadius = Math.max(350, Math.min(position.coords.accuracy, 500));
+        if (nextStop && distanceMetres(next, nextStop.position) <= arrivalRadius) {
+          if (!seenWalkStopsRef.current.has(nextStop.id)) {
+            seenWalkStopsRef.current.add(nextStop.id);
+            const stopHasHistory = HISTORY_SITES.some((site) => (
+              distanceMetres(site.position, nextStop.position) <= 150
+            ));
+            if (!nearbyHistorySite && !stopHasHistory) {
+              setWalkHistoryMoment({
+                siteName: nextStop.name,
+                fact: nextStop.reason,
+              });
+            }
+          }
           setExploredIds(markExplored(nextStop.id));
           setWalkStopIndex((current) => Math.min(route.stops.length, current + 1));
         }
@@ -568,6 +626,10 @@ export default function Home() {
   function startWalk() {
     walkStartedAtRef.current = new Date().toISOString();
     walkCapturesRef.current = [];
+    seenWalkHistorySitesRef.current = new Set();
+    seenWalkStopsRef.current = new Set();
+    setWalkHistoryMoment(null);
+    setHistoryLayer(true);
     setWalkLocationStatus(navigator.geolocation ? "locating" : "unavailable");
     setWanderSheetOpen(false);
     setWalkingActive(true);
@@ -596,6 +658,7 @@ export default function Home() {
       walkCapturesRef.current = [];
     }
     setWalkingActive(false);
+    setWalkHistoryMoment(null);
     setWalkStopIndex(0);
     setWalkPosition(null);
   }
@@ -668,6 +731,7 @@ export default function Home() {
         exploredIds={exploredIds}
         exploredTrail={exploredTrail}
         fogActive={fogActive}
+        historyLayer={historyLayer}
         showRoute={hasRoute}
         walkMode={walkingActive}
         walkStopIndex={walkStopIndex}
@@ -704,6 +768,16 @@ export default function Home() {
           </header>
 
           <aside className="home-rail" aria-label="Map controls">
+            <button
+              type="button"
+              className={`home-rail-chip${historyLayer ? " is-on" : ""}`}
+              aria-pressed={historyLayer}
+              aria-label={historyLayer ? "Turn history layer off" : "Turn history layer on"}
+              onClick={() => setHistoryLayer((current) => !current)}
+            >
+              <BookOpen size={18} strokeWidth={2.2} />
+              <span>History</span>
+            </button>
             <button
               type="button"
               className={`home-rail-chip${fogActive ? " is-on" : ""}`}
@@ -926,10 +1000,13 @@ export default function Home() {
           route={route}
           currentStopIndex={walkStopIndex}
                     locationStatus={walkLocationStatus}
+                    historyMoment={walkHistoryMoment}
           explorationPercent={explorationPercent}
           onBack={endWalk}
           onShare={shareWalk}
           onCapture={captureWalkMoment}
+          onDismissHistoryMoment={dismissWalkHistoryMoment}
+          onAnotherFact={showAnotherWalkFact}
           onAdvance={() => {
             const stop = route.stops[walkStopIndex];
             if (stop) handleExploreStop(stop.id);

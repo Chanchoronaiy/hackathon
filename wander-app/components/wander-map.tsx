@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
 import { CircleMarker, MapContainer, Marker, Polyline, Popup, Rectangle, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import { POI_DATA_TIMESTAMP } from "@/lib/adelaide-data";
+import { HISTORY_SITES } from "@/lib/history-sites";
 import {
   EXPLORATION_RADIUS_M,
   estimateViewportExplorationPercent,
@@ -48,12 +49,12 @@ function CreamWash() {
   );
 }
 
-function Recenter({ position, zoom }: { position: LatLng; zoom?: number }) {
+function Recenter({ position, zoom, animate = true }: { position: LatLng; zoom?: number; animate?: boolean }) {
   const map = useMap();
   const key = position.join(",");
   useEffect(() => {
-    map.setView(position, zoom ?? map.getZoom(), { animate: true });
-  }, [map, key, position, zoom]);
+    map.setView(position, zoom ?? map.getZoom(), { animate });
+  }, [map, key, position, zoom, animate]);
   return null;
 }
 
@@ -64,6 +65,19 @@ function FitRoute({ geometry, enabled }: { geometry: LatLng[]; enabled: boolean 
     if (!enabled || geometry.length < 2) return;
     map.fitBounds(geometry, { padding: [72, 72], maxZoom: 16, animate: true });
   }, [map, key, enabled, geometry]);
+  return null;
+}
+
+function FitHistorySites({ enabled }: { enabled: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!enabled) return;
+    map.fitBounds(HISTORY_SITES.map((site) => site.position), {
+      padding: [64, 64],
+      maxZoom: 14,
+      animate: true,
+    });
+  }, [enabled, map]);
   return null;
 }
 
@@ -173,6 +187,7 @@ export default function WanderMap({
   exploredIds,
   exploredTrail,
   fogActive,
+  historyLayer = false,
   showRoute,
   walkMode = false,
   walkStopIndex = 0,
@@ -185,6 +200,7 @@ export default function WanderMap({
   exploredIds: string[];
   exploredTrail: LatLng[];
   fogActive: boolean;
+  historyLayer?: boolean;
   showRoute: boolean;
   walkMode?: boolean;
   walkStopIndex?: number;
@@ -219,8 +235,9 @@ export default function WanderMap({
             attribution="© OpenStreetMap contributors"
           />
           <CreamWash />
-          <Recenter position={walkMode ? youAreHere : start.position} zoom={walkMode ? 16 : undefined} />
+          <Recenter position={walkMode ? youAreHere : start.position} zoom={walkMode ? 16 : undefined} animate={!walkMode} />
           <FitRoute geometry={route.geometry} enabled={showRoute && !fogActive && !walkMode} />
+          <FitHistorySites enabled={historyLayer} />
           <FogSync
             positions={exploredPositions}
             fogActive={fogActive || walkMode}
@@ -289,6 +306,25 @@ export default function WanderMap({
               )}
             </>
           )}
+          {historyLayer && HISTORY_SITES.map((site) => (
+            <CircleMarker
+              key={site.id}
+              center={site.position}
+              radius={11}
+              pathOptions={{ color: "#fffdf8", fillColor: "#875b2b", fillOpacity: 1, weight: 3 }}
+            >
+              <Popup>
+                <div className="history-popup">
+                  <span className="history-popup-kicker">Local history</span>
+                  <strong>{site.name}</strong>
+                  <p>{site.facts[0]}</p>
+                  <a href={site.sourceUrl} target="_blank" rel="noreferrer">
+                    Source: {site.sourceLabel}
+                  </a>
+                </div>
+              </Popup>
+            </CircleMarker>
+          ))}
         </MapContainer>
         {!walkMode && (
           <div className="map-caption">
@@ -319,8 +355,8 @@ export default function WanderMap({
           </defs>
           {walkMode ? (
             <>
-              <rect width="100%" height="100%" fill="rgba(72, 64, 92, 0.42)" mask="url(#wander-fog-mask)" />
-              <rect width="100%" height="100%" fill="rgba(120, 118, 140, 0.22)" mask="url(#wander-fog-mask)" />
+              <rect width="100%" height="100%" fill="rgba(72, 64, 92, 0.16)" mask="url(#wander-fog-mask)" />
+              <rect width="100%" height="100%" fill="rgba(120, 118, 140, 0.08)" mask="url(#wander-fog-mask)" />
             </>
           ) : (
             <>
