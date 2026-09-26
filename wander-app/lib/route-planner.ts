@@ -27,6 +27,7 @@ export type WanderRoute = {
   shadeEstimate?: number;
   start: AdelaidePlace;
   geometrySource: "grid" | "openrouteservice";
+  unavailableReason?: string;
 };
 
 type ScoredPlace = {
@@ -114,7 +115,7 @@ function chooseWithinBudget(start: AdelaidePlace, candidates: ScoredPlace[], des
       });
     if (valid[0]) return valid[0].stops;
   }
-  return [candidates[0].place];
+  return undefined;
 }
 
 function explainStop(place: AdelaidePlace, scored: ScoredPlace | undefined, mode: PlannerMode): string {
@@ -173,6 +174,23 @@ export function planWanderRoute({
     .slice(0, 12);
 
   const chosen = chooseWithinBudget(start, candidates, targetStops, minutes);
+  const shortestPossibleMinutes = Math.min(
+    ...candidates.map(({ place }) => estimatedMinutes(start, [place])),
+  );
+
+  if (!chosen) {
+    return {
+      title: "No Wander fits yet",
+      stops: [],
+      geometry: [],
+      distanceKm: 0,
+      walkingMinutes: 0,
+      shadeEstimate: 0,
+      start,
+      geometrySource: "grid",
+      unavailableReason: `The closest Wander from here needs about ${shortestPossibleMinutes} minutes. Try a little more time.`,
+    };
+  }
   const byId = new Map(candidates.map((item) => [item.place.id, item]));
   const stops: RouteStop[] = chosen.map((place) => ({
     ...place,

@@ -149,6 +149,8 @@ export default function Home() {
   const [fogActive, setFogActive] = useState(false);
   const [explorationPercent, setExplorationPercent] = useState(0);
   const [generating, setGenerating] = useState(false);
+  const [plannerNotice, setPlannerNotice] = useState<string | null>(null);
+  const [celebratingFinish, setCelebratingFinish] = useState(false);
   const [wanderSheetOpen, setWanderSheetOpen] = useState(false);
   const [walkingActive, setWalkingActive] = useState(false);
   const [walkStopIndex, setWalkStopIndex] = useState(0);
@@ -276,7 +278,10 @@ export default function Home() {
   }, [applyStart]);
 
   const applyPlan = useCallback((nextPlan?: Plan) => {
-    if (!nextPlan && totalMinutes < 1) return;
+    if (!nextPlan && totalMinutes < 1) {
+      setPlannerNotice("Choose some time first, then we’ll find a loop that fits.");
+      return;
+    }
     setGenerating(true);
     const plan = nextPlan ?? { mode, minutes: planMinutes, interests: selected, start, startName, preferUnexplored };
     const preview = planWanderRoute({
@@ -285,7 +290,13 @@ export default function Home() {
       preferUnexplored: plan.preferUnexplored ?? preferUnexplored,
       weather,
     });
+    if (preview.unavailableReason) {
+      setPlannerNotice(preview.unavailableReason);
+      setGenerating(false);
+      return;
+    }
     const frame = requestAnimationFrame(() => {
+      setPlannerNotice(null);
       setActivePlan(plan);
       setFogActive(false);
       setPlannerOpen(false);
@@ -610,6 +621,11 @@ export default function Home() {
     setWalkingActive(false);
     setWalkStopIndex(0);
     setWalkPosition(null);
+    setWanderSheetOpen(false);
+    setActivePlan(null);
+    setOrsOverride(null);
+    setCelebratingFinish(true);
+    window.setTimeout(() => setCelebratingFinish(false), 1800);
   }
 
   function shareWalk() {
@@ -619,6 +635,13 @@ export default function Home() {
       return;
     }
     void navigator.clipboard?.writeText(text).catch(() => undefined);
+  }
+
+  function captureWalkMoment() {
+    const stop = route.stops[Math.min(walkStopIndex, Math.max(route.stops.length - 1, 0))];
+    if (stop) handleExploreStop(stop.id);
+    endWalk();
+    openMemoriesScreen();
   }
 
   function goHomeTab(tab: typeof homeTab) {
@@ -658,6 +681,12 @@ export default function Home() {
 
   return (
     <main className={shellClass}>
+      {celebratingFinish && (
+        <div className="finish-confetti" aria-label="Walk complete">
+          {Array.from({ length: 26 }, (_, index) => <i key={index} style={{ "--confetti-index": index } as React.CSSProperties} />)}
+          <strong>Wander complete!</strong>
+        </div>
+      )}
       <WanderMap
         mode={displayMode}
         route={route}
@@ -928,7 +957,8 @@ export default function Home() {
                   </button>
                 </div>
 
-                <button className="generate" type="button" disabled={generating || totalMinutes < 1} onClick={() => applyPlan()}>
+                {plannerNotice && <p className="planner-notice" role="alert">{plannerNotice}</p>}
+                <button className="generate" type="button" disabled={generating} onClick={() => applyPlan()}>
                   <span>{generating ? "Drawing loop…" : "Generate my Wander"}</span>
                   <span aria-hidden="true">{generating ? "…" : "→"}</span>
                 </button>
@@ -958,7 +988,7 @@ export default function Home() {
           route={route}
           currentStopIndex={walkStopIndex}
           onBack={endWalk}
-          onShare={shareWalk}
+          onCapture={captureWalkMoment}
           onAdvance={() => {
             const stop = route.stops[walkStopIndex];
             if (stop) handleExploreStop(stop.id);

@@ -1064,6 +1064,51 @@ button,input { font:inherit; } button { cursor:pointer; }
 .checkin-photo input { position:absolute; width:1px; height:1px; opacity:0; }
 .checkin-error,.checkin-success { display:flex; align-items:center; justify-content:center; gap:6px; font-size:12px; font-weight:750; }
 .checkin-error { color:#9f3b35; }
+
+.planner-notice {
+  margin: 2px 0 0;
+  padding: 10px 12px;
+  border-radius: 13px;
+  background: #fff1e6;
+  color: #8a3c22;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.finish-confetti {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+.finish-confetti strong {
+  position: relative;
+  z-index: 1;
+  padding: 14px 20px;
+  border-radius: 999px;
+  color: #101812;
+  background: #d5ff49;
+  box-shadow: 0 12px 34px rgb(10 18 12 / .24);
+  font-size: clamp(18px, 3vw, 27px);
+}
+.finish-confetti i {
+  position: absolute;
+  top: -24px;
+  left: calc((var(--confetti-index) * 3.91%) + 1%);
+  width: 11px;
+  height: 18px;
+  border-radius: 3px;
+  background: hsl(calc(var(--confetti-index) * 37deg) 88% 57%);
+  animation: wander-confetti 1.7s cubic-bezier(.22,.61,.36,1) forwards;
+  animation-delay: calc(var(--confetti-index) * -45ms);
+}
+@keyframes wander-confetti {
+  to { transform: translate(calc((var(--confetti-index) - 13) * 13px), 115vh) rotate(760deg); opacity: 0; }
+}
 .checkin-success { color:#38643a; }
 .checkin-verify { width:100%; margin-top:10px; padding:14px; border:0; border-radius:15px; background:var(--ink); color:white; font-weight:850; }
 .checkin-verify:disabled { opacity:.45; }
