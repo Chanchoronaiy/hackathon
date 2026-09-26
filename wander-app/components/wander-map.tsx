@@ -273,14 +273,13 @@ export default function WanderMap({
 
   return (
     <>
-      <div className={`map-stage${fogActive ? " fog-active" : ""}${walkMode ? " walk-mode" : ""}${questPins.length ? " quest-mode" : ""}`} aria-label="Interactive map of central Adelaide">
+      <div className={`map-stage${baseMapStyle === "calm" ? " map-calm" : ""}${fogActive ? " fog-active" : ""}${walkMode ? " walk-mode" : ""}${questPins.length ? " quest-mode" : ""}`} aria-label="Interactive map of central Adelaide">
         <MapContainer center={start.position} zoom={15} zoomControl={false} className="leaflet-map">
           {baseMapStyle === "calm" ? (
             <TileLayer
               key="calm-map"
-              url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-              subdomains="abcd"
-              attribution="© OpenStreetMap contributors · © CARTO"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution="© OpenStreetMap contributors"
             />
           ) : (
             <TileLayer
