@@ -228,9 +228,7 @@ export default function WanderMap({
     const syncFog = () => {
       const positions = exploredPositionsRef.current;
       setClearings(projectClearings(map, positions));
-      if (fogActiveRef.current) {
-        onExplorationPercentRef.current(estimateViewportExplorationPercent(boundsFromMap(map), positions));
-      }
+      onExplorationPercentRef.current(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     };
 
     const onLoad = () => {
@@ -303,12 +301,10 @@ export default function WanderMap({
     if (!map || !mapReady) return;
     const frame = requestAnimationFrame(() => {
       setClearings(projectClearings(map, exploredPositions));
-      if (fogActive) {
-        onExplorationPercent(estimateViewportExplorationPercent(boundsFromMap(map), exploredPositions));
-      }
+      onExplorationPercent(estimateViewportExplorationPercent(boundsFromMap(map), exploredPositions));
     });
     return () => cancelAnimationFrame(frame);
-  }, [mapReady, fogActive, exploredPositions, onExplorationPercent]);
+  }, [mapReady, exploredPositions, onExplorationPercent]);
 
   return (
     <div className={`map-stage${fogActive ? " fog-active" : ""}`} aria-label="Interactive map of central Adelaide">

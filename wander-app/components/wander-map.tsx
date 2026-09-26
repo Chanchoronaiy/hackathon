@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
-import { CircleMarker, MapContainer, Marker, Polyline, Popup, Rectangle, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, Polyline, Popup, Rectangle, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { POI_DATA_TIMESTAMP } from "@/lib/adelaide-data";
 import {
   EXPLORATION_RADIUS_M,
@@ -128,12 +128,10 @@ function boundsFromMap(map: ReturnType<typeof useMap>): MapBounds {
 
 function FogSync({
   positions,
-  fogActive,
   onClearings,
   onPercent,
 }: {
   positions: Array<{ id: string; position: LatLng }>;
-  fogActive: boolean;
   onClearings: (clearings: Clearing[]) => void;
   onPercent: (percent: number) => void;
 }) {
@@ -143,25 +141,25 @@ function FogSync({
   useMapEvents({
     moveend() {
       onClearings(projectClearings(map, positions));
-      if (fogActive) onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
+      onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     },
     zoomend() {
       onClearings(projectClearings(map, positions));
-      if (fogActive) onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
+      onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     },
     resize() {
       onClearings(projectClearings(map, positions));
-      if (fogActive) onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
+      onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     },
   });
 
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       onClearings(projectClearings(map, positions));
-      if (fogActive) onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
+      onPercent(estimateViewportExplorationPercent(boundsFromMap(map), positions));
     });
     return () => cancelAnimationFrame(frame);
-  }, [map, fogActive, onClearings, onPercent, positionKey, positions]);
+  }, [map, onClearings, onPercent, positionKey, positions]);
 
   return null;
 }
@@ -213,10 +211,12 @@ export default function WanderMap({
   walkPosition,
   questPins = [],
   selectedQuestId = null,
+  optionalRouteActive = false,
   onSelectQuest,
   onStreetViewPosition,
   popularPlaces = [],
   onExploreStop,
+  onSelectOptionalStop,
   onExplorationPercent,
 }: {
   mode: "discover" | "heat";
@@ -230,10 +230,12 @@ export default function WanderMap({
   walkPosition?: LatLng | null;
   questPins?: Array<{ id: string; position: LatLng; number: number; done?: boolean }>;
   selectedQuestId?: string | null;
+  optionalRouteActive?: boolean;
   onSelectQuest?: (id: string) => void;
   onStreetViewPosition?: (position: LatLng) => void;
   popularPlaces?: PopularPlace[];
   onExploreStop: (id: string) => void;
+  onSelectOptionalStop?: (id: string) => void;
   onExplorationPercent: (percent: number) => void;
 }) {
   const colour = walkMode ? "#e07045" : mode === "discover" ? "#d8ff64" : "#ffe08a";
@@ -247,15 +249,27 @@ export default function WanderMap({
     ...exploredTrail.map((position, index) => ({ id: `trail-${index}`, position })),
   ], [exploredIds, exploredTrail]);
   const questPositions = useMemo(() => questPins.map((pin) => pin.position), [questPins]);
+  const walkStops = useMemo(
+    () => (optionalRouteActive && route.optionalStops?.length
+      ? [...route.optionalStops, ...route.stops]
+      : route.stops),
+    [optionalRouteActive, route.optionalStops, route.stops],
+  );
+  const walkGeometry = useMemo(
+    () => (optionalRouteActive && route.optionalGeometry?.length
+      ? route.optionalGeometry
+      : route.geometry),
+    [optionalRouteActive, route.optionalGeometry, route.geometry],
+  );
   const youAreHere = useMemo(() => {
     if (walkMode && walkPosition) return walkPosition;
-    if (!walkMode || route.geometry.length === 0) return start.position;
+    if (!walkMode || walkGeometry.length === 0) return start.position;
     const idx = Math.min(
-      route.geometry.length - 1,
-      Math.max(0, Math.floor((walkStopIndex / Math.max(route.stops.length, 1)) * (route.geometry.length - 1))),
+      walkGeometry.length - 1,
+      Math.max(0, Math.floor((walkStopIndex / Math.max(walkStops.length, 1)) * (walkGeometry.length - 1))),
     );
-    return route.geometry[idx] ?? start.position;
-  }, [walkMode, walkPosition, walkStopIndex, route.geometry, route.stops.length, start.position]);
+    return walkGeometry[idx] ?? start.position;
+  }, [walkMode, walkPosition, walkStopIndex, walkGeometry, walkStops.length, start.position]);
 
   return (
     <>
@@ -279,11 +293,16 @@ export default function WanderMap({
           {!questPins.length ? (
             <Recenter position={walkMode ? youAreHere : start.position} zoom={walkMode ? 16 : undefined} />
           ) : null}
-          <FitRoute geometry={route.geometry} enabled={showRoute && !fogActive && !walkMode && questPins.length === 0} />
+          <FitRoute
+            geometry={[
+              ...route.geometry,
+              ...(route.optionalGeometry ?? []),
+            ]}
+            enabled={showRoute && !fogActive && !walkMode && questPins.length === 0}
+          />
           <FitPositions positions={questPositions} enabled={questPins.length > 0 && !walkMode} />
           <FogSync
             positions={exploredPositions}
-            fogActive={fogActive || walkMode}
             onClearings={setClearings}
             onPercent={onExplorationPercent}
           />
@@ -326,13 +345,26 @@ export default function WanderMap({
           ))}
           {showRoute && (
             <>
+              {route.optionalGeometry && route.optionalGeometry.length >= 2 && (
+                <Polyline
+                  positions={route.optionalGeometry}
+                  pathOptions={{
+                    color: optionalRouteActive ? "#5f7a45" : "#4a504a",
+                    weight: optionalRouteActive ? 6 : 5,
+                    opacity: fogActive ? 0.4 : optionalRouteActive ? 0.95 : 0.88,
+                    dashArray: "10 12",
+                    lineCap: "round",
+                    lineJoin: "round",
+                  }}
+                />
+              )}
               <Polyline positions={route.geometry} pathOptions={{ color: walkMode ? "#c45a30" : "#0b0e0c", weight: walkMode ? 10 : 12, opacity: fogActive ? .4 : .88, lineCap: "round", lineJoin: "round" }} />
               <Polyline positions={route.geometry} pathOptions={{ color: colour, weight: walkMode ? 6 : 7, opacity: fogActive ? .6 : 1, lineCap: "round", lineJoin: "round" }} />
               {walkMode ? (
                 <>
-                  {route.stops.length >= 3 && (
+                  {walkStops.length >= 3 && (
                     <Polyline
-                      positions={[...route.stops.map((stop) => stop.position), route.stops[0].position]}
+                      positions={[...walkStops.map((stop) => stop.position), walkStops[0].position]}
                       pathOptions={{ color: "#8a8f88", weight: 2, opacity: 0.55, dashArray: "6 8", lineCap: "round", lineJoin: "round" }}
                     />
                   )}
@@ -341,7 +373,7 @@ export default function WanderMap({
                     radius={11}
                     pathOptions={{ color: "rgba(142,166,107,.35)", fillColor: "#3f4a2e", fillOpacity: 1, weight: 10 }}
                   />
-                  {route.stops.map((stop, index) => {
+                  {walkStops.map((stop, index) => {
                     const faded = index >= walkStopIndex;
                     return (
                       <Marker
@@ -373,6 +405,35 @@ export default function WanderMap({
                       {start.reason}
                     </Popup>
                   </CircleMarker>
+                  {(route.optionalStops ?? []).map((stop) => (
+                    <CircleMarker
+                      key={`optional-${stop.id}`}
+                      center={stop.position}
+                      radius={8}
+                      pathOptions={{
+                        color: optionalRouteActive ? "#3f4a2e" : "#4a504a",
+                        fillColor: optionalRouteActive ? "#8ea66b" : "#c5cac3",
+                        fillOpacity: 1,
+                        weight: 3,
+                        opacity: 0.95,
+                      }}
+                      eventHandlers={{
+                        click: () => {
+                          onSelectOptionalStop?.(stop.id);
+                          onExploreStop(stop.id);
+                        },
+                      }}
+                    >
+                      <Tooltip direction="right" offset={[10, 0]} opacity={1} permanent className="optional-stop-label">
+                        {stop.name}
+                      </Tooltip>
+                      <Popup>
+                        <strong>{stop.name}</strong>
+                        <br />
+                        {stop.why}
+                      </Popup>
+                    </CircleMarker>
+                  ))}
                   {route.stops.map((stop) => (
                     <StopMarker
                       key={stop.id}

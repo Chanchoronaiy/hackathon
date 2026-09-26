@@ -18,6 +18,10 @@ export type WanderPlanInput = {
   focusPlaceId?: string;
   /** Custom searched destination (scenic stop along the way). */
   focusDestination?: { name: string; position: LatLng };
+  /** Prefer a different set of stops (remix). */
+  remixSeed?: number;
+  /** Avoid these place ids when remixing scenery. */
+  excludePlaceIds?: string[];
 };
 
 export type RouteStop = AdelaidePlace & { why: string };
@@ -25,7 +29,13 @@ export type RouteStop = AdelaidePlace & { why: string };
 export type WanderRoute = {
   title: string;
   stops: RouteStop[];
+  /** Primary coloured path (quest / destination). */
   geometry: LatLng[];
+  /** Optional grey scenery path — remixed independently of the primary. */
+  optionalGeometry?: LatLng[];
+  optionalStops?: RouteStop[];
+  optionalDistanceKm?: number;
+  optionalWalkingMinutes?: number;
   distanceKm: number;
   walkingMinutes: number;
   shadeEstimate?: number;
@@ -143,9 +153,12 @@ export function planWanderRoute({
   weather = null,
   focusPlaceId,
   focusDestination,
+  remixSeed = 0,
+  excludePlaceIds = [],
 }: WanderPlanInput): WanderRoute {
   const start = resolveStart(startPosition, startName);
   const explored = new Set(exploredIds);
+  const excluded = new Set(excludePlaceIds);
   // More available time should produce a meaningfully longer wander. The old
   // fixed count made 60+ minute selections look almost identical to 30 mins.
   const targetStops = minutes <= 15
@@ -186,8 +199,7 @@ export function planWanderRoute({
   );
 
   if (focusPlace && focusPlace.id !== start.id) {
-    const questStops: AdelaidePlace[] = [focusPlace];
-    const duration = estimatedMinutes(start, questStops);
+    const duration = estimatedMinutes(start, [focusPlace]);
     const budget = Math.max(minutes, duration + 12);
     const nearby = ADELAIDE_PLACES
       .filter((place) => place.id !== focusPlace.id && place.id !== start.id && place.category !== "calm")
@@ -196,18 +208,23 @@ export function planWanderRoute({
         const viaFocus = distanceKm(focusPlace.position, place.position);
         const direct = distanceKm(start.position, focusPlace.position);
         const scenic = place.surprise * 1.6 + (place.category === "green" || place.category === "photo" ? 2.5 : 0);
-        // Prefer places roughly between start and destination.
         const corridor = viaStart + viaFocus - direct;
+        const avoid = excluded.has(place.id) ? 8 : 0;
+        const remixNudge = ((place.id.charCodeAt(0) + remixSeed * 17) % 7) * 0.45;
         return {
           place,
-          score: scenic - corridor * 3.2 - viaStart * 0.35,
+          score: scenic - corridor * 3.2 - viaStart * 0.35 - avoid + remixNudge,
         };
       })
       .sort((a, b) => b.score - a.score);
 
-    let stopsPlaces = questStops;
+    const offset = remixSeed > 0 ? remixSeed % Math.max(nearby.length, 1) : 0;
+    const rotated = offset > 0
+      ? [...nearby.slice(offset), ...nearby.slice(0, offset)]
+      : nearby;
+
     const scenicPicks: AdelaidePlace[] = [];
-    for (const candidate of nearby.slice(0, 10)) {
+    for (const candidate of rotated.slice(0, 12)) {
       const trial = orderAsLoop(start, [...scenicPicks, focusPlace, candidate.place].filter(
         (place, index, list) => list.findIndex((item) => item.id === place.id) === index,
       ));
@@ -216,45 +233,67 @@ export function planWanderRoute({
       }
       if (scenicPicks.length >= Math.min(3, Math.max(1, Math.floor(budget / 25)))) break;
     }
-    stopsPlaces = orderAsLoop(start, [...scenicPicks, focusPlace].filter(
-      (place, index, list) => list.findIndex((item) => item.id === place.id) === index,
-    ));
-    if (!stopsPlaces.some((place) => place.id === focusPlace.id)) {
-      stopsPlaces = [...stopsPlaces.filter((place) => place.id !== focusPlace.id), focusPlace];
-    }
 
-    const stops: RouteStop[] = stopsPlaces.map((place) => ({
+    const orderedScenic = orderAsLoop(start, scenicPicks);
+    const questStop: RouteStop = {
+      ...focusPlace,
+      why: focusDestination
+        ? `${focusPlace.reason} Your searched stop.`
+        : `${focusPlace.reason} Daily quest stop.`,
+    };
+    const optionalStops: RouteStop[] = orderedScenic.map((place) => ({
       ...place,
-      why: place.id === focusPlace.id
-        ? focusDestination
-          ? `${place.reason} Your searched stop.`
-          : `${place.reason} Daily quest stop.`
-        : explainStop(place, undefined, mode),
+      why: explainStop(place, undefined, mode),
     }));
-    const waypoints: LatLng[] = [start.position, ...stops.map((stop) => stop.position), start.position];
-    const distance = routeDistance(start, stopsPlaces);
+
+    const directWaypoints: LatLng[] = [start.position, focusPlace.position];
+    const optionalWaypoints: LatLng[] = orderedScenic.length > 0
+      ? [start.position, ...orderedScenic.map((place) => place.position), focusPlace.position, start.position]
+      : [];
+
+    const distance = distanceKm(start.position, focusPlace.position);
+    const optionalLoopPlaces = [...orderedScenic, focusPlace];
+    const optionalDistance = orderedScenic.length > 0
+      ? routeDistance(start, optionalLoopPlaces)
+      : undefined;
     return {
       title: focusPlace.name,
-      stops,
-      geometry: gridLoopGeometry(waypoints),
+      stops: [questStop],
+      optionalStops: optionalStops.length > 0 ? optionalStops : undefined,
+      geometry: gridLoopGeometry(directWaypoints),
+      optionalGeometry: optionalWaypoints.length > 0 ? gridLoopGeometry(optionalWaypoints) : undefined,
+      optionalDistanceKm: optionalDistance,
+      optionalWalkingMinutes: optionalDistance != null
+        ? estimatedMinutes(start, optionalLoopPlaces)
+        : undefined,
       distanceKm: distance,
-      walkingMinutes: estimatedMinutes(start, stopsPlaces),
-      shadeEstimate: estimateShade({ mode, stops: stopsPlaces, weather }),
+      walkingMinutes: Math.max(1, Math.round((distance / 4.8) * 60)),
+      shadeEstimate: estimateShade({ mode, stops: [focusPlace, ...orderedScenic], weather }),
       start,
       geometrySource: "grid",
     };
   }
 
+  const interestPool = ["art", "coffee", "green", "photo"] as Interest[];
+  const remixedInterests = remixSeed > 0
+    ? new Set<Interest>([
+        ...interestPool.filter((_, index) => (index + remixSeed) % 2 === remixSeed % 2),
+        ...selectedInterests,
+      ])
+    : selectedInterests;
+
   const candidates: ScoredPlace[] = ADELAIDE_PLACES
     .filter((place) => place.category !== "calm")
     .map((place) => {
-      const interestBoost = selectedInterests.has(place.category as Interest) ? 5 : 0;
+      const interestBoost = remixedInterests.has(place.category as Interest) ? 5 : 0;
       const noveltyBoost = explored.has(place.id) ? 0 : (preferUnexplored ? 5.2 : 1.2);
       const modeScore = mode === "heat" ? place.comfort * 2.2 : place.surprise * 1.8 + interestBoost;
       const detour = distanceKm(start.position, place.position) * detourWeight;
+      const avoid = excluded.has(place.id) ? 12 : 0;
+      const remixNudge = remixSeed > 0 ? ((place.id.length + remixSeed * 13) % 9) * 0.55 : 0;
       return {
         place,
-        score: modeScore + noveltyBoost - detour,
+        score: modeScore + noveltyBoost - detour - avoid + remixNudge,
         interestBoost,
         noveltyBoost,
         detour,

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ArrowLeft, Bookmark, CalendarDays, Camera, Cloud, Coffee, Compass, Leaf, Map, MapPinned, Palette, Sun, Trees, Trophy, Users, X } from "lucide-react";
+import { Angry, ArrowLeft, Bookmark, CalendarDays, Camera, Cloud, Coffee, Compass, Leaf, Map, MapPinned, Palette, Shuffle, Sun, Trees, Trophy, Users, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DailyQuestsScreen from "@/components/daily-quests-screen";
 import ExploreScreen, { type ExploreSuggestion } from "@/components/explore-screen";
@@ -16,6 +16,16 @@ import StreetViewDialog from "@/components/street-view-dialog";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
 import { dailyQuests, isQuestCompleted, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
+import {
+  canRemix,
+  consumeRemixTry,
+  purchaseRemixPack,
+  readRemixTries,
+  remixTriesRemaining,
+  REMIX_FREE_TRIES,
+  REMIX_PACK_PRICE,
+  REMIX_PACK_TRIES,
+} from "@/lib/remix-tries";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
@@ -42,6 +52,8 @@ type Plan = {
   preferUnexplored?: boolean;
   focusPlaceId?: string;
   focusDestination?: { name: string; position: LatLng };
+  remixSeed?: number;
+  excludePlaceIds?: string[];
 };
 type LocationStatus = "locating" | "located" | "idle";
 
@@ -75,35 +87,45 @@ function categoryLabel(category: PlaceCategory) {
 
 function YourWanderSheet({
   route,
-  exploredIds,
+  remixLeft,
+  onRemix,
   onStartWalk,
   onSave,
   onClose,
 }: {
   route: WanderRoute;
-  exploredIds: string[];
+  remixLeft: number;
+  onRemix: () => void;
   onStartWalk: () => void;
   onSave: () => void;
   onClose: () => void;
 }) {
   const stops = route.stops;
-  const newCount = stops.filter((stop) => !exploredIds.includes(stop.id)).length;
-  const newPercent = stops.length === 0 ? 0 : Math.round((newCount / stops.length) * 100);
 
   return (
     <aside className="wander-sheet" aria-label="Your wander">
       <span className="wander-sheet-handle" aria-hidden="true" />
       <div className="wander-sheet-top">
         <p className="wander-sheet-kicker">Your wander</p>
-        <button type="button" className="wander-sheet-close" aria-label="Close your wander" onClick={onClose}>
-          <X size={18} strokeWidth={2.4} />
-        </button>
+        <div className="wander-sheet-top-actions">
+          <button
+            type="button"
+            className="wander-sheet-remix"
+            aria-label={remixLeft > 0 ? `Remix optional scenery, ${remixLeft} left this week` : "Remix optional scenery"}
+            title={remixLeft > 0 ? `Remix scenery · ${remixLeft} left` : "Remix scenery"}
+            onClick={onRemix}
+          >
+            <Shuffle size={17} strokeWidth={2.4} />
+          </button>
+          <button type="button" className="wander-sheet-close" aria-label="Close your wander" onClick={onClose}>
+            <X size={18} strokeWidth={2.4} />
+          </button>
+        </div>
       </div>
       <div className="wander-sheet-stats" aria-label="Route summary">
         <span>{route.distanceKm.toFixed(1)} km</span>
         <span>{route.walkingMinutes} min</span>
         <span>{stops.length} stop{stops.length === 1 ? "" : "s"}</span>
-        <span>{newPercent}% new</span>
       </div>
       <ol className="wander-sheet-stops">
         {stops.map((stop, index) => (
@@ -150,6 +172,9 @@ export default function Home() {
   const [orsOverride, setOrsOverride] = useState<{
     key: string;
     geometry: LatLng[];
+    optionalGeometry?: LatLng[];
+    optionalDistanceKm?: number;
+    optionalWalkingMinutes?: number;
     distanceKm?: number;
     walkingMinutes?: number;
   } | null>(null);
@@ -165,7 +190,7 @@ export default function Home() {
   const [walkStopIndex, setWalkStopIndex] = useState(0);
   const [walkPosition, setWalkPosition] = useState<LatLng | null>(null);
   const [heatEscapeOpen, setHeatEscapeOpen] = useState(false);
-  const [heatEscape, setHeatEscape] = useState<{ shade: number; coolerMinutes: number } | null>(null);
+  const [heatEscape, setHeatEscape] = useState<{ shade: number } | null>(null);
   const [savedOpen, setSavedOpen] = useState(false);
   const [exploreOpen, setExploreOpen] = useState(false);
   const [memoriesOpen, setMemoriesOpen] = useState(false);
@@ -182,6 +207,25 @@ export default function Home() {
   const [popularityVisible, setPopularityVisible] = useState(false);
   const [popularityLoading, setPopularityLoading] = useState(false);
   const [homeTab, setHomeTab] = useState<"map" | "explore" | "memories" | "saved" | "friends">("map");
+  const [remixTries, setRemixTries] = useState(() => readRemixTries());
+  const [remixPaywallOpen, setRemixPaywallOpen] = useState(false);
+  const [remixFeedback, setRemixFeedback] = useState<"thanks" | "angry" | null>(null);
+  const [optionalRouteActive, setOptionalRouteActive] = useState(false);
+  const remixFeedbackTimer = useRef<number | null>(null);
+  const remixLeft = remixTriesRemaining(remixTries);
+
+  const showRemixFeedback = useCallback((kind: "thanks" | "angry") => {
+    if (remixFeedbackTimer.current != null) window.clearTimeout(remixFeedbackTimer.current);
+    setRemixFeedback(kind);
+    remixFeedbackTimer.current = window.setTimeout(() => {
+      setRemixFeedback(null);
+      remixFeedbackTimer.current = null;
+    }, kind === "angry" ? 2200 : 2400);
+  }, []);
+
+  useEffect(() => () => {
+    if (remixFeedbackTimer.current != null) window.clearTimeout(remixFeedbackTimer.current);
+  }, []);
 
   const totalMinutes = wanderHours * 60 + wanderMinutes;
   const planMinutes = Math.max(5, Math.min(180, totalMinutes || 0));
@@ -204,8 +248,8 @@ export default function Home() {
   );
 
   const loopKey = useMemo(
-    () => `${planned.start.position.join(",")}|${planned.stops.map((stop) => `${stop.id}:${stop.position.join(",")}`).join(";")}`,
-    [planned.start.position, planned.stops],
+    () => `${planned.start.position.join(",")}|${planned.stops.map((stop) => `${stop.id}:${stop.position.join(",")}`).join(";")}|opt:${(planned.optionalStops ?? []).map((stop) => stop.id).join(",")}`,
+    [planned.start.position, planned.stops, planned.optionalStops],
   );
 
   const route = useMemo(
@@ -213,6 +257,9 @@ export default function Home() {
       ? {
           ...planned,
           geometry: orsOverride.geometry,
+          optionalGeometry: orsOverride.optionalGeometry ?? planned.optionalGeometry,
+          optionalDistanceKm: orsOverride.optionalDistanceKm ?? planned.optionalDistanceKm,
+          optionalWalkingMinutes: orsOverride.optionalWalkingMinutes ?? planned.optionalWalkingMinutes,
           distanceKm: orsOverride.distanceKm ?? planned.distanceKm,
           walkingMinutes: orsOverride.walkingMinutes ?? planned.walkingMinutes,
           geometrySource: "openrouteservice" as const,
@@ -220,6 +267,21 @@ export default function Home() {
       : planned,
     [planned, orsOverride, loopKey],
   );
+
+  const displayRoute = useMemo(() => {
+    if (!optionalRouteActive || !route.optionalStops?.length) return route;
+    return {
+      ...route,
+      stops: [...route.optionalStops, ...route.stops],
+      distanceKm: route.optionalDistanceKm ?? route.distanceKm,
+      walkingMinutes: route.optionalWalkingMinutes ?? route.walkingMinutes,
+      geometry: route.optionalGeometry?.length ? route.optionalGeometry : route.geometry,
+    };
+  }, [optionalRouteActive, route]);
+
+  useEffect(() => {
+    setOptionalRouteActive(false);
+  }, [loopKey]);
 
   const hasRoute = activePlan != null;
   const displayMode = activePlan?.mode ?? mode;
@@ -317,6 +379,7 @@ export default function Home() {
     const frame = requestAnimationFrame(() => {
       setPlannerNotice(null);
       setActivePlan(plan);
+      setOrsOverride(null);
       setFogActive(false);
       setPlannerOpen(false);
       setWanderSheetOpen(true);
@@ -324,7 +387,6 @@ export default function Home() {
       if (plan.mode === "heat" && preview.shadeEstimate != null) {
         setHeatEscape({
           shade: preview.shadeEstimate,
-          coolerMinutes: Math.max(1, Math.round(preview.walkingMinutes * (preview.shadeEstimate / 100))),
         });
         setHeatEscapeOpen(true);
       } else {
@@ -333,6 +395,34 @@ export default function Home() {
     });
     void frame;
   }, [exploredIds, mode, planMinutes, preferUnexplored, selected, start, startName, totalMinutes, weather]);
+
+  const remixWander = useCallback(() => {
+    if (!activePlan) return;
+    if (!canRemix()) {
+      setRemixPaywallOpen(true);
+      return;
+    }
+    const nextTries = consumeRemixTry();
+    setRemixTries(nextTries);
+    // Only remix optional scenery — keep the primary quest/destination fixed.
+    const excludePlaceIds = [
+      ...(route.optionalStops ?? []),
+      ...route.stops,
+    ]
+      .map((stop) => stop.id)
+      .filter((id) => id !== activePlan.focusPlaceId && !id.startsWith("search:"));
+    applyPlan({
+      ...activePlan,
+      remixSeed: (activePlan.remixSeed ?? 0) + 1,
+      excludePlaceIds,
+    });
+  }, [activePlan, applyPlan, route.optionalStops, route.stops]);
+
+  useEffect(() => {
+    const sync = () => setRemixTries(readRemixTries());
+    window.addEventListener("wander:remix-tries", sync);
+    return () => window.removeEventListener("wander:remix-tries", sync);
+  }, []);
 
   const handleExploreStop = useCallback((id: string) => {
     setExploredIds(markExplored(id));
@@ -364,17 +454,17 @@ export default function Home() {
         setWalkPosition(next);
         setExploredTrail(recordExploredPosition(next));
 
-        const nextStop = route.stops[walkStopIndex];
+        const nextStop = displayRoute.stops[walkStopIndex];
         if (nextStop && distanceMetres(next, nextStop.position) <= 45) {
           setExploredIds(markExplored(nextStop.id));
-          setWalkStopIndex((current) => Math.min(route.stops.length, current + 1));
+          setWalkStopIndex((current) => Math.min(displayRoute.stops.length, current + 1));
         }
       },
       () => undefined,
       { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [walkingActive, route.stops, walkStopIndex]);
+  }, [walkingActive, displayRoute.stops, walkStopIndex]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -387,22 +477,50 @@ export default function Home() {
 
   useEffect(() => {
     if (!hasRoute) return;
-    const waypoints: LatLng[] = [
+    const primaryWaypoints: LatLng[] = [
       planned.start.position,
       ...planned.stops.map((stop) => stop.position),
-      planned.start.position,
     ];
+    // Direct quest/destination paths are start → destination (not a closed loop).
+    const isDirect = Boolean(activePlan?.focusPlaceId || activePlan?.focusDestination);
+    if (!isDirect) {
+      primaryWaypoints.push(planned.start.position);
+    }
+
+    const optionalStops = planned.optionalStops ?? [];
+    const optionalWaypoints: LatLng[] | null = optionalStops.length > 0
+      ? [
+          planned.start.position,
+          ...optionalStops.map((stop) => stop.position),
+          ...(planned.stops[0] ? [planned.stops[0].position] : []),
+          planned.start.position,
+        ]
+      : null;
+
     let cancelled = false;
     setReadyRouteKey(null);
-    void resolveLoopGeometry(waypoints).then(({ geometry, distanceKm, walkingMinutes, source }) => {
+    void Promise.all([
+      resolveLoopGeometry(primaryWaypoints),
+      optionalWaypoints ? resolveLoopGeometry(optionalWaypoints) : Promise.resolve(null),
+    ]).then(([primary, optional]) => {
       if (cancelled) return;
-      if (source === "openrouteservice") {
-        setOrsOverride({ key: loopKey, geometry, distanceKm, walkingMinutes });
+      if (primary.source === "openrouteservice" || optional?.source === "openrouteservice") {
+        setOrsOverride({
+          key: loopKey,
+          geometry: primary.source === "openrouteservice" ? primary.geometry : planned.geometry,
+          optionalGeometry: optional?.source === "openrouteservice"
+            ? optional.geometry
+            : planned.optionalGeometry,
+          optionalDistanceKm: optional?.distanceKm ?? planned.optionalDistanceKm,
+          optionalWalkingMinutes: optional?.walkingMinutes ?? planned.optionalWalkingMinutes,
+          distanceKm: primary.distanceKm,
+          walkingMinutes: primary.walkingMinutes,
+        });
       }
       setReadyRouteKey(loopKey);
     });
     return () => { cancelled = true; };
-  }, [hasRoute, loopKey, planned.start.position, planned.stops]);
+  }, [hasRoute, loopKey, planned.start.position, planned.stops, planned.optionalStops, planned.geometry, planned.optionalGeometry, activePlan?.focusPlaceId, activePlan?.focusDestination]);
 
   useEffect(() => {
     if (!document.modelContext) return;
@@ -701,10 +819,10 @@ export default function Home() {
       interests: activePlan.interests,
       start: activePlan.start,
       startName: activePlan.startName,
-      stopNames: route.stops.map((stop) => stop.name),
-      walkingMinutes: route.walkingMinutes,
-      distanceKm: route.distanceKm,
-      title: route.title,
+      stopNames: displayRoute.stops.map((stop) => stop.name),
+      walkingMinutes: displayRoute.walkingMinutes,
+      distanceKm: displayRoute.distanceKm,
+      title: displayRoute.title,
     });
     setSavedTrials(next);
     const localTrial = next[0];
@@ -715,7 +833,7 @@ export default function Home() {
       });
     }
     openSavedScreen(null);
-  }, [activePlan, hasRoute, openSavedScreen, route.distanceKm, route.stops, route.title, route.walkingMinutes]);
+  }, [activePlan, displayRoute.distanceKm, displayRoute.stops, displayRoute.title, displayRoute.walkingMinutes, hasRoute, openSavedScreen]);
 
   const restoreTrial = useCallback((trial: SavedTrial) => {
     const nextMinutes = Math.max(5, Math.min(180, Math.round(trial.minutes)));
@@ -843,7 +961,7 @@ export default function Home() {
   }
 
   function captureWalkMoment() {
-    const stop = route.stops[Math.min(walkStopIndex, Math.max(route.stops.length - 1, 0))];
+    const stop = displayRoute.stops[Math.min(walkStopIndex, Math.max(displayRoute.stops.length - 1, 0))];
     if (stop) handleExploreStop(stop.id);
     exitWalk();
     openMemoriesScreen();
@@ -911,8 +1029,10 @@ export default function Home() {
         walkPosition={walkPosition}
         questPins={questPins}
         selectedQuestId={selectedQuestId}
+        optionalRouteActive={optionalRouteActive}
         onSelectQuest={setSelectedQuestId}
         onExploreStop={handleExploreStop}
+        onSelectOptionalStop={() => setOptionalRouteActive((current) => !current)}
         onExplorationPercent={setExplorationPercent}
         onStreetViewPosition={setStreetViewPosition}
         popularPlaces={popularityVisible ? popularPlaces : []}
@@ -1264,8 +1384,9 @@ export default function Home() {
             <ArrowLeft size={20} strokeWidth={2.4} />
           </button>
           <YourWanderSheet
-            route={route}
-            exploredIds={exploredIds}
+            route={displayRoute}
+            remixLeft={remixLeft}
+            onRemix={remixWander}
             onStartWalk={startWalk}
             onSave={handleSaveTrial}
             onClose={closeWanderSheet}
@@ -1273,17 +1394,84 @@ export default function Home() {
         </>
       )}
 
+      {remixPaywallOpen && (
+        <div className="remix-paywall-backdrop" role="dialog" aria-modal="true" aria-labelledby="remix-paywall-title">
+          <button
+            type="button"
+            className="remix-paywall-scrim"
+            aria-label="Dismiss"
+            onClick={() => {
+              setRemixPaywallOpen(false);
+              showRemixFeedback("angry");
+            }}
+          />
+          <div className="remix-paywall-card">
+            <h2 id="remix-paywall-title">Out of remixes!!</h2>
+            <p>
+              You’ve used your {REMIX_FREE_TRIES} free remixes this week.
+              Unlock {REMIX_PACK_TRIES} more for ${REMIX_PACK_PRICE}.
+            </p>
+            <div className="remix-paywall-actions">
+              <button
+                type="button"
+                className="remix-paywall-cancel"
+                onClick={() => {
+                  setRemixPaywallOpen(false);
+                  showRemixFeedback("angry");
+                }}
+              >
+                Not now
+              </button>
+              <button
+                type="button"
+                className="remix-paywall-buy"
+                onClick={() => {
+                  setRemixTries(purchaseRemixPack());
+                  setRemixPaywallOpen(false);
+                  showRemixFeedback("thanks");
+                }}
+              >
+                Pay ${REMIX_PACK_PRICE}
+                <span className="remix-paywall-pls" aria-hidden="true">(pls)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {remixFeedback === "thanks" && (
+        <div className="remix-thanks" role="status" aria-live="polite">
+          <span className="remix-thanks-face" aria-hidden="true">
+            <span className="remix-thanks-heart remix-thanks-heart-a" />
+            <span className="remix-thanks-heart remix-thanks-heart-b" />
+            <span className="remix-thanks-kiss" />
+          </span>
+          <span>Thank you for paying</span>
+        </div>
+      )}
+
+      {remixFeedback === "angry" && (
+        <div className="remix-angry" role="status" aria-live="polite">
+          <span className="remix-angry-face" aria-hidden="true">
+            <span className="remix-angry-steam remix-angry-steam-l" />
+            <span className="remix-angry-steam remix-angry-steam-r" />
+            <Angry size={26} strokeWidth={2.6} />
+          </span>
+          <span>Fine. No remix for you.</span>
+        </div>
+      )}
+
       {walkingActive && hasRoute && (
         <WalkModeChrome
-          route={route}
+          route={displayRoute}
           currentStopIndex={walkStopIndex}
           onBack={exitWalk}
           onFinish={finishWalk}
           onCapture={captureWalkMoment}
           onAdvance={() => {
-            const stop = route.stops[walkStopIndex];
+            const stop = displayRoute.stops[walkStopIndex];
             if (stop) handleExploreStop(stop.id);
-            setWalkStopIndex((current) => Math.min(route.stops.length, current + 1));
+            setWalkStopIndex((current) => Math.min(displayRoute.stops.length, current + 1));
           }}
         />
       )}
@@ -1306,11 +1494,6 @@ export default function Home() {
             </button>
             <span className="heat-escape-kicker"><Sun size={14} /> Beat the heat</span>
             <strong id="heat-escape-title">You escaped about {heatEscape.shade}% of the harsh sunshine</strong>
-            <p>
-              That’s roughly {heatEscape.coolerMinutes} cooler minutes on this walk
-              {weather ? ` · UV ${weather.uvIndex} · feels like ${weather.apparent}°` : ""}.
-              Estimated from comfort attributes and modelled weather — not live street sensors.
-            </p>
           </dialog>
         </div>
       )}
