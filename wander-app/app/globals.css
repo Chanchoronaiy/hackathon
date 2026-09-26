@@ -582,22 +582,6 @@ button,input { font:inherit; } button { cursor:pointer; }
   border-color:rgba(110,168,210,.7); background:rgba(255,253,248,.98); color:var(--ink);
 }
 
-.map-style-toggle {
-  position:absolute; z-index:510; right:18px; bottom:calc(12px + env(safe-area-inset-bottom,0px) + 198px);
-  display:inline-flex; align-items:center; gap:7px; min-height:36px; padding:0 12px;
-  border:1.5px solid rgba(110,168,210,.5); border-radius:999px;
-  background:rgba(255,253,248,.94); color:var(--ink); box-shadow:0 8px 20px rgba(0,0,0,.12);
-  backdrop-filter:blur(14px); font:inherit; font-size:12px; font-weight:800; cursor:pointer;
-}
-.map-style-toggle:hover { background:#fff; }
-.google-map-background {
-  position:absolute; inset:0; z-index:420; background:#ece7dc;
-}
-.google-map-error {
-  display:grid; place-items:center; padding:32px; color:var(--ink); text-align:center;
-  background:rgba(247,243,234,.96); font-size:14px; font-weight:750;
-}
-
 .home-explore-pill {
   position:absolute; z-index:510; left:18px;
   bottom:calc(12px + env(safe-area-inset-bottom,0px) + 150px);
