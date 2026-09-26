@@ -751,7 +751,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 }
 .home-dock.is-saved { z-index:520; }
 .home-dock.is-saved .home-nav {
-  border-radius:0; box-shadow:0 -6px 20px rgba(0,0,0,.08);
+  box-shadow:0 -6px 20px rgba(0,0,0,.08);
 }
 
 .saved-page-shell {
@@ -778,6 +778,10 @@ button,input { font:inherit; } button { cursor:pointer; }
   padding:calc(env(safe-area-inset-top, 0px) + 28px) 18px calc(92px + env(safe-area-inset-bottom,0px));
   background:var(--paper); overflow:auto;
 }
+.explore-screen > *,
+.saved-screen > *,
+.memories-screen > *,
+.friends-screen > * { flex-shrink:0; }
 .explore-screen-header h1 {
   margin:0; color:var(--ink); font-size:clamp(34px,8vw,44px); font-weight:800;
   letter-spacing:-.05em; line-height:1;
@@ -796,7 +800,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 }
 .explore-search input::placeholder { color:#8a9086; }
 .explore-filters {
-  display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none;
+  display:flex; gap:8px; overflow-x:auto; padding:2px 2px 6px; scrollbar-width:none;
 }
 .explore-filters::-webkit-scrollbar { display:none; }
 .explore-filters button {
@@ -817,16 +821,16 @@ button,input { font:inherit; } button { cursor:pointer; }
   border:0; background:transparent; color:var(--sage); font-size:13px; font-weight:750; padding:0;
 }
 .explore-suggest-scroller {
-  display:flex; gap:12px; overflow-x:auto; padding:2px 2px 8px; scrollbar-width:none;
+  display:flex; gap:12px; overflow-x:auto; padding:4px 4px 18px; margin:0 -4px; scrollbar-width:none;
 }
 .explore-suggest-scroller::-webkit-scrollbar { display:none; }
 .explore-suggest-card {
-  flex:0 0 min(72vw,260px); display:grid; gap:0; padding:0; border:0; border-radius:20px;
+  flex:0 0 min(72vw,320px); display:grid; gap:0; padding:0; border:0; border-radius:20px;
   background:var(--paper); text-align:left; color:var(--ink);
   box-shadow:0 10px 24px rgba(42,57,27,.1); overflow:hidden;
 }
 .explore-suggest-map {
-  height:120px; display:block;
+  height:150px; display:block;
   background:
     linear-gradient(135deg, rgba(142,166,107,.28), transparent 60%),
     linear-gradient(180deg, var(--blush), var(--paper));
