@@ -9,6 +9,12 @@ type OrsFeatureCollection = {
     geometry?: {
       coordinates?: [number, number][];
     };
+    properties?: {
+      summary?: {
+        distance?: number;
+        duration?: number;
+      };
+    };
   }>;
 };
 
@@ -34,7 +40,10 @@ export async function POST(request: Request) {
   }
 
   const coordinates = waypoints.map(([lat, lng]) => [lng, lat]);
-  const response = await fetch("https://api.heigit.org/v2/directions/foot-walking/geojson", {
+  // HeiGIT moved OpenRouteService behind the /openrouteservice path. Omitting
+  // this segment returns a 404, which made the client fall back to its visual
+  // grid and could draw lines through buildings.
+  const response = await fetch("https://api.heigit.org/openrouteservice/v2/directions/foot-walking/geojson", {
     method: "POST",
     headers: {
       authorization: apiKey,
@@ -57,5 +66,11 @@ export async function POST(request: Request) {
   }
 
   const geometry: LatLng[] = line.map(([lng, lat]) => [lat, lng]);
-  return Response.json({ geometry, provider: "openrouteservice" });
+  const summary = data.features?.[0]?.properties?.summary;
+  return Response.json({
+    geometry,
+    provider: "openrouteservice",
+    distanceKm: typeof summary?.distance === "number" ? summary.distance / 1000 : undefined,
+    walkingMinutes: typeof summary?.duration === "number" ? Math.round(summary.duration / 60) : undefined,
+  });
 }

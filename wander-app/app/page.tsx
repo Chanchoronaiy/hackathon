@@ -1,14 +1,20 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { ChevronUp, Coffee, Compass, Eye, Leaf, MapPin, Palette, Sun, Trees, X } from "lucide-react";
+import { ArrowLeft, Bookmark, CalendarDays, Camera, Cloud, Coffee, Compass, Leaf, Map, Palette, Sun, Trees, Users, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ExploreScreen, { type ExploreSuggestion } from "@/components/explore-screen";
+import FriendsScreen from "@/components/friends-screen";
+import MemoriesScreen from "@/components/memories-screen";
+import SavedScreen from "@/components/saved-screen";
+import WalkModeChrome from "@/components/walk-mode-chrome";
 import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
-import { ADELAIDE_PLACES, START } from "@/lib/adelaide-data";
-import { markExplored, readExploredIds } from "@/lib/exploration";
+import { START, type PlaceCategory } from "@/lib/adelaide-data";
+import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
+import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
 import { fetchAdelaideWeather, type WeatherSnapshot } from "@/lib/weather";
 
 const WanderMap = dynamic(() => import("@/components/wander-map"), {
@@ -21,7 +27,14 @@ const WanderMap = dynamic(() => import("@/components/wander-map"), {
 });
 
 type Mode = "discover" | "heat";
-type Plan = { mode: Mode; minutes: number; interests: string[]; start?: LatLng; startName?: string };
+type Plan = {
+  mode: Mode;
+  minutes: number;
+  interests: string[];
+  start?: LatLng;
+  startName?: string;
+  preferUnexplored?: boolean;
+};
 type LocationStatus = "locating" | "located" | "idle";
 
 declare global {
@@ -36,80 +49,74 @@ const interests = [
   { id: "art", label: "Art", icon: Palette },
   { id: "coffee", label: "Coffee", icon: Coffee },
   { id: "green", label: "Green space", icon: Trees },
+  { id: "photo", label: "Photo spots", icon: Camera },
 ];
 
-const calmSpot = ADELAIDE_PLACES.find((place) => place.id === "city-library") ?? ADELAIDE_PLACES[0];
-
-function walkMinutesBetween(a: LatLng, b: LatLng) {
-  const latitudeKm = (a[0] - b[0]) * 111;
-  const longitudeKm = (a[1] - b[1]) * 91;
-  return Math.max(1, Math.round((Math.hypot(latitudeKm, longitudeKm) / 4.8) * 60));
+function categoryLabel(category: PlaceCategory) {
+  switch (category) {
+    case "art": return "Street art";
+    case "coffee": return "Cafe";
+    case "green": return "Green space";
+    case "photo": return "Photo";
+    case "history": return "Heritage";
+    case "water": return "Water";
+    case "calm": return "Quiet";
+    default: return "Stop";
+  }
 }
 
-function AboutRoute({
+function YourWanderSheet({
   route,
-  routeCopy,
-  empty,
-  open,
-  onToggle,
+  exploredIds,
+  onStartWalk,
+  onSave,
+  onClose,
 }: {
   route: WanderRoute;
-  routeCopy: string;
-  empty: boolean;
-  open: boolean;
-  onToggle: () => void;
+  exploredIds: string[];
+  onStartWalk: () => void;
+  onSave: () => void;
+  onClose: () => void;
 }) {
-  if (empty) {
-    return (
-      <aside className="about-panel is-empty" aria-live="polite">
-        <p className="about-panel-empty">no route yet</p>
-      </aside>
-    );
-  }
-
-  const itinerary = [route.start, ...route.stops];
+  const stops = route.stops;
+  const newCount = stops.filter((stop) => !exploredIds.includes(stop.id)).length;
+  const newPercent = stops.length === 0 ? 0 : Math.round((newCount / stops.length) * 100);
 
   return (
-    <aside className={`about-panel${open ? " is-open" : ""}`} aria-live="polite">
-      <button
-        type="button"
-        className="about-panel-toggle"
-        aria-expanded={open}
-        aria-controls="about-route-details"
-        onClick={onToggle}
-      >
-        <ChevronUp size={14} strokeWidth={2.8} className="about-panel-chevron" aria-hidden="true" />
-        <span className="about-panel-rule" aria-hidden="true" />
-        <span className="about-panel-title">About this route</span>
-      </button>
-      {open && (
-        <div id="about-route-details" className="about-panel-body">
-          <p className="about-panel-meta">{routeCopy}</p>
-          <span className="about-panel-rule" aria-hidden="true" />
-          <ol className="about-stops">
-            {itinerary.map((place, index) => {
-              const next = itinerary[index + 1];
-              return (
-                <li key={`${place.id}-${index}`}>
-                  <div className="about-stop">
-                    <span>{place.name}</span>
-                  </div>
-                  {next ? (
-                    <div className="about-leg" aria-label={`${walkMinutesBetween(place.position, next.position)} minutes to next stop`}>
-                      <span className="about-leg-line" aria-hidden="true" />
-                      <span className="about-leg-mins">{walkMinutesBetween(place.position, next.position)}m</span>
-                      <span className="about-leg-line" aria-hidden="true" />
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
-          {route.shadeEstimate != null && (
-            <p className="about-shade">Estimated shade {route.shadeEstimate}% · comfort attributes + modelled weather · not live sensing</p>
-          )}
-        </div>
-      )}
+    <aside className="wander-sheet" aria-label="Your wander">
+      <span className="wander-sheet-handle" aria-hidden="true" />
+      <div className="wander-sheet-top">
+        <p className="wander-sheet-kicker">Your wander</p>
+        <button type="button" className="wander-sheet-close" aria-label="Close your wander" onClick={onClose}>
+          <X size={18} strokeWidth={2.4} />
+        </button>
+      </div>
+      <h2 className="wander-sheet-title">{route.title}</h2>
+      <div className="wander-sheet-stats" aria-label="Route summary">
+        <span>{route.distanceKm.toFixed(1)} km</span>
+        <span>{route.walkingMinutes} min</span>
+        <span>{stops.length} stop{stops.length === 1 ? "" : "s"}</span>
+        <span>{newPercent}% new</span>
+      </div>
+      <ol className="wander-sheet-stops">
+        {stops.map((stop, index) => (
+          <li key={stop.id}>
+            <span className="wander-sheet-index" aria-hidden="true">{index + 1}</span>
+            <div className="wander-sheet-stop">
+              <strong>{stop.name}</strong>
+              <p>{categoryLabel(stop.category)} · {stop.why}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+      <div className="wander-sheet-actions">
+        <button type="button" className="wander-sheet-start" onClick={onStartWalk}>
+          Start walk
+        </button>
+        <button type="button" className="wander-sheet-save" aria-label="Save this wander" onClick={onSave}>
+          <Bookmark size={20} strokeWidth={2.2} />
+        </button>
+      </div>
     </aside>
   );
 }
@@ -119,6 +126,7 @@ export default function Home() {
   const [wanderHours, setWanderHours] = useState(0);
   const [wanderMinutes, setWanderMinutes] = useState(0);
   const [selected, setSelected] = useState(["art", "green"]);
+  const [preferUnexplored, setPreferUnexplored] = useState(true);
   const [start, setStart] = useState<LatLng | undefined>(undefined);
   const [startName, setStartName] = useState<string | undefined>(undefined);
   const [startQuery, setStartQuery] = useState("");
@@ -126,20 +134,38 @@ export default function Home() {
   const startTouchedRef = useRef(false);
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
-  const [calmOpen, setCalmOpen] = useState(false);
   const [exploredIds, setExploredIds] = useState<string[]>([]);
-  const [orsOverride, setOrsOverride] = useState<{ key: string; geometry: LatLng[] } | null>(null);
+  const [exploredTrail, setExploredTrail] = useState<LatLng[]>([]);
+  const [orsOverride, setOrsOverride] = useState<{
+    key: string;
+    geometry: LatLng[];
+    distanceKm?: number;
+    walkingMinutes?: number;
+  } | null>(null);
   const [fogActive, setFogActive] = useState(false);
   const [explorationPercent, setExplorationPercent] = useState(0);
   const [generating, setGenerating] = useState(false);
-  const [aboutOpen, setAboutOpen] = useState(false);
+  const [wanderSheetOpen, setWanderSheetOpen] = useState(false);
+  const [walkingActive, setWalkingActive] = useState(false);
+  const [walkStopIndex, setWalkStopIndex] = useState(0);
+  const [walkPosition, setWalkPosition] = useState<LatLng | null>(null);
+  const [heatEscapeOpen, setHeatEscapeOpen] = useState(false);
+  const [heatEscape, setHeatEscape] = useState<{ shade: number; coolerMinutes: number } | null>(null);
+  const [savedOpen, setSavedOpen] = useState(false);
+  const [exploreOpen, setExploreOpen] = useState(false);
+  const [memoriesOpen, setMemoriesOpen] = useState(false);
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [savedTrials, setSavedTrials] = useState<SavedTrial[]>([]);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [plannerOpen, setPlannerOpen] = useState(false);
+  const [homeTab, setHomeTab] = useState<"map" | "explore" | "memories" | "saved" | "friends">("map");
 
   const totalMinutes = wanderHours * 60 + wanderMinutes;
   const planMinutes = Math.max(5, Math.min(180, totalMinutes || 0));
 
   const draftPlan = useMemo(
-    () => ({ mode, minutes: planMinutes, interests: selected, start, startName }),
-    [mode, planMinutes, selected, start, startName],
+    () => ({ mode, minutes: planMinutes, interests: selected, start, startName, preferUnexplored }),
+    [mode, planMinutes, selected, start, startName, preferUnexplored],
   );
 
   const planned = useMemo(
@@ -147,10 +173,11 @@ export default function Home() {
       ...(activePlan ?? draftPlan),
       start: start ?? (activePlan ?? draftPlan).start,
       startName: startName ?? (activePlan ?? draftPlan).startName,
+      preferUnexplored: activePlan?.preferUnexplored ?? preferUnexplored,
       exploredIds,
       weather,
     }),
-    [activePlan, draftPlan, start, startName, exploredIds, weather],
+    [activePlan, draftPlan, start, startName, preferUnexplored, exploredIds, weather],
   );
 
   const loopKey = useMemo(
@@ -160,18 +187,19 @@ export default function Home() {
 
   const route = useMemo(
     () => orsOverride?.key === loopKey
-      ? { ...planned, geometry: orsOverride.geometry, geometrySource: "openrouteservice" as const }
+      ? {
+          ...planned,
+          geometry: orsOverride.geometry,
+          distanceKm: orsOverride.distanceKm ?? planned.distanceKm,
+          walkingMinutes: orsOverride.walkingMinutes ?? planned.walkingMinutes,
+          geometrySource: "openrouteservice" as const,
+        }
       : planned,
     [planned, orsOverride, loopKey],
   );
 
   const hasRoute = activePlan != null;
   const displayMode = activePlan?.mode ?? mode;
-
-  const routeCopy = useMemo(
-    () => `${route.walkingMinutes} min · ${route.distanceKm.toFixed(1)} km`,
-    [route.distanceKm, route.walkingMinutes],
-  );
 
   const applyStart = useCallback((next: { label: string; position: LatLng }, options?: { fromUser?: boolean }) => {
     if (options?.fromUser) startTouchedRef.current = true;
@@ -240,23 +268,35 @@ export default function Home() {
     );
     return () => { cancelled = true; };
   }, [applyStart]);
-  const weatherDetail = weather
-    ? `Feels ${weather.apparent}° · UV ${weather.uvIndex} · ${weather.time}`
-    : "Modelled · Adelaide";
 
   const applyPlan = useCallback((nextPlan?: Plan) => {
     if (!nextPlan && totalMinutes < 1) return;
     setGenerating(true);
-    const plan = nextPlan ?? { mode, minutes: planMinutes, interests: selected, start, startName };
+    const plan = nextPlan ?? { mode, minutes: planMinutes, interests: selected, start, startName, preferUnexplored };
+    const preview = planWanderRoute({
+      ...plan,
+      exploredIds,
+      preferUnexplored: plan.preferUnexplored ?? preferUnexplored,
+      weather,
+    });
     const frame = requestAnimationFrame(() => {
       setActivePlan(plan);
-      setCalmOpen(false);
       setFogActive(false);
-      setAboutOpen(false);
+      setPlannerOpen(false);
+      setWanderSheetOpen(true);
       setGenerating(false);
+      if (plan.mode === "heat" && preview.shadeEstimate != null) {
+        setHeatEscape({
+          shade: preview.shadeEstimate,
+          coolerMinutes: Math.max(1, Math.round(preview.walkingMinutes * (preview.shadeEstimate / 100))),
+        });
+        setHeatEscapeOpen(true);
+      } else {
+        setHeatEscapeOpen(false);
+      }
     });
     void frame;
-  }, [mode, planMinutes, selected, start, startName, totalMinutes]);
+  }, [exploredIds, mode, planMinutes, preferUnexplored, selected, start, startName, totalMinutes, weather]);
 
   const handleExploreStop = useCallback((id: string) => {
     setExploredIds(markExplored(id));
@@ -265,9 +305,31 @@ export default function Home() {
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       setExploredIds(readExploredIds());
+      setExploredTrail(readExploredTrail());
+      setSavedTrials(readSavedTrials());
     });
     return () => cancelAnimationFrame(frame);
   }, []);
+
+  useEffect(() => {
+    if (!walkingActive || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const next: LatLng = [position.coords.latitude, position.coords.longitude];
+        setWalkPosition(next);
+        setExploredTrail(recordExploredPosition(next));
+
+        const nextStop = route.stops[walkStopIndex];
+        if (nextStop && distanceMetres(next, nextStop.position) <= 45) {
+          setExploredIds(markExplored(nextStop.id));
+          setWalkStopIndex((current) => Math.min(route.stops.length, current + 1));
+        }
+      },
+      () => undefined,
+      { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [walkingActive, route.stops, walkStopIndex]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -286,9 +348,9 @@ export default function Home() {
       planned.start.position,
     ];
     let cancelled = false;
-    void resolveLoopGeometry(waypoints).then(({ geometry, source }) => {
+    void resolveLoopGeometry(waypoints).then(({ geometry, distanceKm, walkingMinutes, source }) => {
       if (cancelled || source === "grid") return;
-      setOrsOverride({ key: loopKey, geometry });
+      setOrsOverride({ key: loopKey, geometry, distanceKm, walkingMinutes });
     });
     return () => { cancelled = true; };
   }, [hasRoute, loopKey, planned.start.position, planned.stops]);
@@ -305,7 +367,7 @@ export default function Home() {
         properties: {
           mode: { type: "string", enum: ["discover", "heat"] },
           minutes: { type: "number", minimum: 5, maximum: 180 },
-          interests: { type: "array", items: { type: "string", enum: ["art", "coffee", "green"] } },
+          interests: { type: "array", items: { type: "string", enum: ["art", "coffee", "green", "photo"] } },
         },
         required: ["mode", "minutes"],
         additionalProperties: false,
@@ -325,6 +387,122 @@ export default function Home() {
     return () => lifecycle.abort();
   }, [applyPlan, start, startName]);
 
+  const closeOverlayScreens = useCallback(() => {
+    setSavedOpen(false);
+    setExploreOpen(false);
+    setMemoriesOpen(false);
+    setFriendsOpen(false);
+  }, []);
+
+  const openSavedScreen = useCallback((note?: string | null) => {
+    setSaveNote(note ?? null);
+    closeOverlayScreens();
+    setSavedOpen(true);
+    setHomeTab("saved");
+    setWanderSheetOpen(false);
+    setPlannerOpen(false);
+    setFogActive(false);
+    setHeatEscapeOpen(false);
+  }, [closeOverlayScreens]);
+
+  const openExploreScreen = useCallback(() => {
+    closeOverlayScreens();
+    setExploreOpen(true);
+    setHomeTab("explore");
+    setWanderSheetOpen(false);
+    setPlannerOpen(false);
+    setFogActive(false);
+    setHeatEscapeOpen(false);
+  }, [closeOverlayScreens]);
+
+  const openMemoriesScreen = useCallback(() => {
+    closeOverlayScreens();
+    setMemoriesOpen(true);
+    setHomeTab("memories");
+    setWanderSheetOpen(false);
+    setPlannerOpen(false);
+    setFogActive(false);
+    setHeatEscapeOpen(false);
+  }, [closeOverlayScreens]);
+
+  const openFriendsScreen = useCallback(() => {
+    closeOverlayScreens();
+    setFriendsOpen(true);
+    setHomeTab("friends");
+    setWanderSheetOpen(false);
+    setPlannerOpen(false);
+    setFogActive(false);
+    setHeatEscapeOpen(false);
+  }, [closeOverlayScreens]);
+
+  const openExploreSuggestion = useCallback((suggestion: ExploreSuggestion) => {
+    const nextMinutes = Math.max(5, Math.min(180, suggestion.minutes));
+    setMode(suggestion.mode);
+    setWanderHours(Math.floor(nextMinutes / 60));
+    setWanderMinutes(nextMinutes % 60);
+    setSelected(suggestion.interests);
+    closeOverlayScreens();
+    applyPlan({
+      mode: suggestion.mode,
+      minutes: nextMinutes,
+      interests: suggestion.interests,
+      start,
+      startName,
+      preferUnexplored,
+    });
+  }, [applyPlan, closeOverlayScreens, preferUnexplored, start, startName]);
+
+  const handleSaveTrial = useCallback(() => {
+    if (!hasRoute || !activePlan) {
+      openSavedScreen("Generate a wander first, then save it.");
+      return;
+    }
+    const next = saveTrial({
+      mode: activePlan.mode,
+      minutes: activePlan.minutes,
+      interests: activePlan.interests,
+      start: activePlan.start,
+      startName: activePlan.startName,
+      stopNames: route.stops.map((stop) => stop.name),
+      walkingMinutes: route.walkingMinutes,
+      distanceKm: route.distanceKm,
+      title: route.title,
+    });
+    setSavedTrials(next);
+    openSavedScreen(null);
+  }, [activePlan, hasRoute, openSavedScreen, route.distanceKm, route.stops, route.title, route.walkingMinutes]);
+
+  const restoreTrial = useCallback((trial: SavedTrial) => {
+    const nextMinutes = Math.max(5, Math.min(180, Math.round(trial.minutes)));
+    setMode(trial.mode);
+    setWanderHours(Math.floor(nextMinutes / 60));
+    setWanderMinutes(nextMinutes % 60);
+    setSelected(trial.interests);
+    if (trial.start) {
+      applyStart({
+        label: trial.startName ?? "Saved start",
+        position: trial.start,
+      }, { fromUser: true });
+    } else {
+      clearToVictoriaSquare(true);
+    }
+    applyPlan({
+      mode: trial.mode,
+      minutes: nextMinutes,
+      interests: trial.interests,
+      start: trial.start,
+      startName: trial.startName,
+    });
+    setSavedOpen(false);
+    setSaveNote(null);
+    setHomeTab("map");
+    setPlannerOpen(false);
+    setWanderSheetOpen(true);
+    setExploreOpen(false);
+    setMemoriesOpen(false);
+    setFriendsOpen(false);
+  }, [applyPlan, applyStart, clearToVictoriaSquare]);
+
   function toggleInterest(id: string) {
     setSelected((current) => current.includes(id)
       ? current.filter((item) => item !== id)
@@ -334,7 +512,115 @@ export default function Home() {
   const shellClass = [
     "app-shell",
     fogActive ? "mode-fog fog-mode" : displayMode === "heat" ? "mode-heat" : "mode-discover",
+    plannerOpen ? "planner-open" : "home-view",
   ].join(" ");
+
+  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen;
+  const showHomeDock = !plannerOpen && !wanderSheetOpen && !walkingActive;
+  const tabScreenOpen = savedOpen || exploreOpen || memoriesOpen || friendsOpen;
+
+  function toggleFog() {
+    if (fogActive) {
+      setFogActive(false);
+      setHomeTab("map");
+      return;
+    }
+    setFogActive(true);
+    setWalkingActive(false);
+    setHomeTab("map");
+    closeOverlayScreens();
+    setPlannerOpen(false);
+    setWanderSheetOpen(false);
+    setHeatEscapeOpen(false);
+  }
+
+  function openPlanner() {
+    setPlannerOpen(true);
+    setWanderSheetOpen(false);
+    setWalkingActive(false);
+    closeOverlayScreens();
+    setHeatEscapeOpen(false);
+    setHomeTab("map");
+  }
+
+  function closePlanner() {
+    setPlannerOpen(false);
+  }
+
+  function closeWanderSheet() {
+    setWanderSheetOpen(false);
+  }
+
+  function startWalk() {
+    setWanderSheetOpen(false);
+    setWalkingActive(true);
+    setWalkStopIndex(0);
+    setWalkPosition(null);
+    setFogActive(false);
+    closeOverlayScreens();
+    setPlannerOpen(false);
+    setHomeTab("map");
+  }
+
+  function endWalk() {
+    setWalkingActive(false);
+    setWalkStopIndex(0);
+    setWalkPosition(null);
+  }
+
+  function shareWalk() {
+    const text = `Walking ${route.title} · ${route.distanceKm.toFixed(1)} km · ${route.walkingMinutes} min in Adelaide`;
+    if (navigator.share) {
+      void navigator.share({ title: "Wander", text }).catch(() => undefined);
+      return;
+    }
+    void navigator.clipboard?.writeText(text).catch(() => undefined);
+  }
+
+  function captureWalkMoment() {
+    const stop = route.stops[Math.min(walkStopIndex, Math.max(route.stops.length - 1, 0))];
+    if (stop) handleExploreStop(stop.id);
+    if (walkStopIndex >= route.stops.length) {
+      openMemoriesScreen();
+      endWalk();
+      return;
+    }
+  }
+
+  function goHomeTab(tab: typeof homeTab) {
+    setHomeTab(tab);
+    if (tab === "map") {
+      setFogActive(false);
+      closeOverlayScreens();
+      setPlannerOpen(false);
+      setWanderSheetOpen(false);
+      setWalkingActive(false);
+      return;
+    }
+    if (tab === "explore") {
+      openExploreScreen();
+      return;
+    }
+    if (tab === "memories") {
+      openMemoriesScreen();
+      return;
+    }
+    if (tab === "saved") {
+      setFogActive(false);
+      closeOverlayScreens();
+      setSavedOpen(true);
+      setPlannerOpen(false);
+      setWanderSheetOpen(false);
+      setSaveNote(null);
+      return;
+    }
+    if (tab === "friends") {
+      openFriendsScreen();
+      return;
+    }
+    setFogActive(false);
+    closeOverlayScreens();
+  }
 
   return (
     <main className={shellClass}>
@@ -342,134 +628,302 @@ export default function Home() {
         mode={displayMode}
         route={route}
         exploredIds={exploredIds}
+        exploredTrail={exploredTrail}
         fogActive={fogActive}
         showRoute={hasRoute}
+        walkMode={walkingActive}
+        walkStopIndex={walkStopIndex}
+        walkPosition={walkPosition}
         onExploreStop={handleExploreStop}
         onExplorationPercent={setExplorationPercent}
       />
-      <header className="topbar">
-        <div className="brand" aria-label="Wander home">
-          <span className="brand-mark"><Compass size={19} strokeWidth={2.4} /></span><span>Wander</span>
-        </div>
-        {fogActive ? (
-          <div className="explore-pill" aria-live="polite" aria-label="Exploration of the current map view">
-            <span className="explore-you">You</span>
-            <strong>{explorationPercent.toFixed(1)}%</strong>
-            <span className="explore-meta">{exploredIds.length} places cleared</span>
-          </div>
-        ) : (
-          <div className="weather-pill" aria-label="Current modelled Adelaide weather">
-            <Sun size={16} />
-            <span>{weather ? `${weather.temperature}°` : "—°"}</span>
-            <span className="weather-detail">{weatherDetail}</span>
-          </div>
-        )}
-      </header>
 
-      <div className="left-stack" hidden={fogActive}>
-        <section className="planner" aria-label="Wander planner">
-          <StartSearch
-            value={startQuery}
-            onQueryChange={(query) => {
-              setStartQuery(query);
-              if (!query.trim()) {
-                clearToVictoriaSquare(true);
-                setLocationStatus("idle");
-              }
-            }}
-            onSelect={(suggestion) => applyStart(suggestion, { fromUser: true })}
-            onUseMyLocation={useMyLocation}
-            locating={locationStatus === "locating"}
-            statusNote={null}
-          />
-          <fieldset className="mode-switch" aria-label="Route mode">
-            <button className={mode === "discover" ? "active" : ""} onClick={() => setMode("discover")} type="button"><Leaf size={18} /> Discover</button>
-            <button className={mode === "heat" ? "active heat" : ""} onClick={() => setMode("heat")} type="button"><Sun size={18} /> Beat the heat</button>
-          </fieldset>
+      {showMapChrome && (
+        <>
+          <header className="home-top">
+            <button type="button" className="home-profile" aria-label="Open profile">
+              <span aria-hidden="true">AS</span>
+            </button>
+            <div className="home-search">
+              <StartSearch
+                variant="home"
+                placeholder="Search Adelaide"
+                ariaLabel="Search Adelaide"
+                value={startQuery}
+                onQueryChange={(query) => {
+                  setStartQuery(query);
+                  if (!query.trim()) {
+                    clearToVictoriaSquare(true);
+                    setLocationStatus("idle");
+                  }
+                }}
+                onSelect={(suggestion) => applyStart(suggestion, { fromUser: true })}
+                onUseMyLocation={useMyLocation}
+                locating={locationStatus === "locating"}
+                statusNote={null}
+              />
+            </div>
+          </header>
 
-          <div className="time-block">
-            <span className="field-label">Time to wander</span>
-            <fieldset className="time-boxes">
-              <legend className="sr-only">Hours and minutes to wander</legend>
-              <label className="time-box">
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  max={3}
-                  value={wanderHours}
-                  aria-label="Hours"
-                  onChange={(event) => {
-                    const raw = event.target.value;
-                    if (raw === "") {
-                      setWanderHours(0);
-                      return;
-                    }
-                    const next = Number(raw);
-                    setWanderHours(Number.isFinite(next) ? Math.max(0, Math.min(3, Math.trunc(next))) : 0);
-                  }}
-                />
-                <span>hours</span>
-              </label>
-              <MinuteRuler value={wanderMinutes} onChange={setWanderMinutes} />
-            </fieldset>
+          <aside className="home-rail" aria-label="Map controls">
+            <button
+              type="button"
+              className={`home-rail-chip${fogActive ? " is-on" : ""}`}
+              aria-pressed={fogActive}
+              aria-label={fogActive ? "Turn fog exploration off" : "Turn fog exploration on"}
+              onClick={toggleFog}
+            >
+              <Cloud size={18} strokeWidth={2.2} />
+              <span>{fogActive ? "On" : "Off"}</span>
+            </button>
+          </aside>
+
+          <div className="home-explore-pill" aria-live="polite">
+            <span className="home-explore-dot" aria-hidden="true" />
+            <span>{explorationPercent.toFixed(0)}% explored</span>
           </div>
+        </>
+      )}
 
-          {mode === "discover" ? (
-            <div className="interest-block"><span className="field-label">Make it more you</span><div className="chips">
-              {interests.map(({ id, label, icon: Icon }) => (
-                <button key={id} type="button" aria-pressed={selected.includes(id)} className={selected.includes(id) ? "selected" : ""} onClick={() => toggleInterest(id)}><Icon size={15} /> {label}</button>
-              ))}
-            </div></div>
-          ) : (
-            <p className="heat-note">
-              Favours comfort using modelled weather and estimated shade from cached place attributes — not live street sensors
-              {weather ? ` · updated ${weather.time} · UV ${weather.uvIndex} · wind ${weather.windSpeed} km/h` : " · updating weather…"}
-              {weather ? ` · ${weather.precipitationProbability}% rain chance this hour.` : ""}
-            </p>
+      {showHomeDock && (
+        <div className={`home-dock${tabScreenOpen ? " is-saved" : ""}`}>
+          {!tabScreenOpen && (
+            <button className="start-wander" type="button" onClick={openPlanner}>
+              <span>Start wandering</span>
+            </button>
           )}
+          <nav className="home-nav" aria-label="Primary">
+            <button
+              type="button"
+              className={homeTab === "map" && !tabScreenOpen ? "is-active" : ""}
+              onClick={() => goHomeTab("map")}
+            >
+              <Map size={20} strokeWidth={2.2} />
+              <span>Map</span>
+            </button>
+            <button
+              type="button"
+              className={homeTab === "explore" || exploreOpen ? "is-active" : ""}
+              onClick={() => goHomeTab("explore")}
+            >
+              <Compass size={20} strokeWidth={2.2} />
+              <span>Explore</span>
+            </button>
+            <button
+              type="button"
+              className={homeTab === "memories" || memoriesOpen ? "is-active" : ""}
+              onClick={() => goHomeTab("memories")}
+            >
+              <CalendarDays size={20} strokeWidth={2.2} />
+              <span>Memories</span>
+            </button>
+            <button
+              type="button"
+              className={homeTab === "saved" || savedOpen ? "is-active" : ""}
+              onClick={() => goHomeTab("saved")}
+            >
+              <Bookmark size={20} strokeWidth={2.2} />
+              <span>Saved</span>
+            </button>
+            <button
+              type="button"
+              className={homeTab === "friends" || friendsOpen ? "is-active" : ""}
+              onClick={() => goHomeTab("friends")}
+            >
+              <Users size={20} strokeWidth={2.2} />
+              <span>Friends</span>
+            </button>
+          </nav>
+        </div>
+      )}
 
-          <button className="generate" type="button" disabled={generating || totalMinutes < 1} onClick={() => applyPlan()}>
-            <span>{generating ? "Drawing loop…" : mode === "discover" ? "Find my wander" : "Find a cooler walk"}</span>
-            <span aria-hidden="true">{generating ? "…" : "→"}</span>
-          </button>
-        </section>
-
-        <AboutRoute
-          route={route}
-          routeCopy={routeCopy}
-          empty={!hasRoute}
-          open={aboutOpen}
-          onToggle={() => setAboutOpen((current) => !current)}
+      {exploreOpen && !fogActive && (
+        <ExploreScreen
+          onOpenSuggestion={openExploreSuggestion}
+          onOpenCollection={(id) => {
+            if (id === "coffee") {
+              setSelected(["coffee"]);
+              setMode("discover");
+            } else {
+              setSelected(["art", "photo"]);
+              setMode("discover");
+            }
+            setExploreOpen(false);
+            openPlanner();
+          }}
         />
-      </div>
-      <div className="map-actions">
-        <button
-          className={`explore-button${fogActive ? " active" : ""}`}
-          type="button"
-          aria-pressed={fogActive}
-          aria-label={fogActive ? "Exit exploration fog view" : "Show explored areas on the map"}
-          onClick={() => { setFogActive((open) => !open); setCalmOpen(false); }}
-        >
-          {fogActive ? <X size={18} /> : <Eye size={18} />}
-          <span>{fogActive ? "Exit fog" : "Explore map"}</span>
-        </button>
-        {!fogActive && (
-          <button className="calm-button" type="button" aria-label="Find a curated calm spot" onClick={() => setCalmOpen(true)}>
-            <span className="calm-pulse" /> Calm spot
+      )}
+
+      {memoriesOpen && !fogActive && (
+        <MemoriesScreen onAddMemory={() => openPlanner()} />
+      )}
+
+      {friendsOpen && !fogActive && (
+        <FriendsScreen />
+      )}
+
+      {savedOpen && !fogActive && (
+        <SavedScreen
+          trials={savedTrials}
+          note={saveNote}
+          onOpenTrial={restoreTrial}
+          onRemoveTrial={(id) => setSavedTrials(deleteSavedTrial(id))}
+        />
+      )}
+
+      {plannerOpen && !fogActive && (
+        <div className="planner-popup-backdrop">
+          <button
+            type="button"
+            className="planner-popup-scrim"
+            aria-label="Close planner"
+            onClick={closePlanner}
+          />
+          <dialog
+            className="planner-popup"
+            open
+            aria-label="Wander planner"
+          >
+            <div className="planner-popup-stack">
+              <section className="planner" aria-label="Wander planner">
+                <StartSearch
+                  value={startQuery}
+                  onQueryChange={(query) => {
+                    setStartQuery(query);
+                    if (!query.trim()) {
+                      clearToVictoriaSquare(true);
+                      setLocationStatus("idle");
+                    }
+                  }}
+                  onSelect={(suggestion) => applyStart(suggestion, { fromUser: true })}
+                  onUseMyLocation={useMyLocation}
+                  locating={locationStatus === "locating"}
+                  statusNote={null}
+                />
+                <fieldset className="mode-switch" aria-label="Route mode">
+                  <button className={mode === "discover" ? "active" : ""} onClick={() => setMode("discover")} type="button"><Leaf size={18} /> Discover</button>
+                  <button className={mode === "heat" ? "active heat" : ""} onClick={() => setMode("heat")} type="button"><Sun size={18} /> Beat the heat</button>
+                </fieldset>
+
+                <div className="time-block">
+                  <span className="field-label">Time to wander</span>
+                  <fieldset className="time-boxes">
+                    <legend className="sr-only">Hours and minutes to wander</legend>
+                    <label className="time-box">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={0}
+                        max={3}
+                        value={wanderHours}
+                        aria-label="Hours"
+                        onChange={(event) => {
+                          const raw = event.target.value;
+                          if (raw === "") {
+                            setWanderHours(0);
+                            return;
+                          }
+                          const next = Number(raw);
+                          setWanderHours(Number.isFinite(next) ? Math.max(0, Math.min(3, Math.trunc(next))) : 0);
+                        }}
+                      />
+                      <span>hours</span>
+                    </label>
+                    <MinuteRuler value={wanderMinutes} onChange={setWanderMinutes} />
+                  </fieldset>
+                </div>
+
+                <div className="interest-block">
+                  <span className="interest-heading">A little more of...</span>
+                  <div className="chips">
+                    {interests.map(({ id, label, icon: Icon }) => (
+                      <button key={id} type="button" aria-pressed={selected.includes(id)} className={selected.includes(id) ? "selected" : ""} onClick={() => toggleInterest(id)}><Icon size={15} /> {label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="prefer-unexplored">
+                  <div className="prefer-unexplored-copy">
+                    <span className="interest-heading">Prefer unexplored areas</span>
+                  </div>
+                  <button
+                    type="button"
+                    className={`prefer-toggle${preferUnexplored ? " is-on" : ""}`}
+                    role="switch"
+                    aria-checked={preferUnexplored}
+                    aria-label="Prefer unexplored areas"
+                    onClick={() => setPreferUnexplored((current) => !current)}
+                  >
+                    <span className="prefer-toggle-thumb" aria-hidden="true" />
+                  </button>
+                </div>
+
+                <button className="generate" type="button" disabled={generating || totalMinutes < 1} onClick={() => applyPlan()}>
+                  <span>{generating ? "Drawing loop…" : "Generate my Wander"}</span>
+                  <span aria-hidden="true">{generating ? "…" : "→"}</span>
+                </button>
+              </section>
+            </div>
+          </dialog>
+        </div>
+      )}
+
+      {wanderSheetOpen && hasRoute && !fogActive && (
+        <>
+          <button type="button" className="wander-back" aria-label="Back to map" onClick={closeWanderSheet}>
+            <ArrowLeft size={20} strokeWidth={2.4} />
           </button>
-        )}
-      </div>
-      {calmOpen && !fogActive && (
-        <aside className="calm-card" aria-live="polite">
-          <button type="button" aria-label="Close calm spot" onClick={() => setCalmOpen(false)}><X size={17} /></button>
-          <span className="calm-kicker"><MapPin size={14} /> Curated calm spot · not from your loop</span>
-          <strong>{calmSpot.name}</strong>
-          <p>
-            {calmSpot.reason}. Quiet/calm attributes are curated, not measured live.
-            {calmSpot.openingHours ? ` ${calmSpot.openingHours}.` : " Opening hours unverified."}
-          </p>
-        </aside>
+          <YourWanderSheet
+            route={route}
+            exploredIds={exploredIds}
+            onStartWalk={startWalk}
+            onSave={handleSaveTrial}
+            onClose={closeWanderSheet}
+          />
+        </>
+      )}
+
+      {walkingActive && hasRoute && (
+        <WalkModeChrome
+          route={route}
+          currentStopIndex={walkStopIndex}
+          explorationPercent={explorationPercent}
+          onBack={endWalk}
+          onShare={shareWalk}
+          onCapture={captureWalkMoment}
+          onAdvance={() => {
+            const stop = route.stops[walkStopIndex];
+            if (stop) handleExploreStop(stop.id);
+            setWalkStopIndex((current) => Math.min(route.stops.length, current + 1));
+          }}
+        />
+      )}
+
+      {heatEscapeOpen && heatEscape && !fogActive && !walkingActive && (
+        <div className="heat-escape-backdrop">
+          <button
+            type="button"
+            className="heat-escape-scrim"
+            aria-label="Dismiss sunshine escape"
+            onClick={() => setHeatEscapeOpen(false)}
+          />
+          <dialog
+            className="heat-escape-card"
+            open
+            aria-labelledby="heat-escape-title"
+          >
+            <button type="button" aria-label="Close sunshine escape" onClick={() => setHeatEscapeOpen(false)}>
+              <X size={17} />
+            </button>
+            <span className="heat-escape-kicker"><Sun size={14} /> Beat the heat</span>
+            <strong id="heat-escape-title">You escaped about {heatEscape.shade}% of the harsh sunshine</strong>
+            <p>
+              That’s roughly {heatEscape.coolerMinutes} cooler minutes on this walk
+              {weather ? ` · UV ${weather.uvIndex} · feels like ${weather.apparent}°` : ""}.
+              Estimated from comfort attributes and modelled weather — not live street sensors.
+            </p>
+          </dialog>
+        </div>
       )}
     </main>
   );

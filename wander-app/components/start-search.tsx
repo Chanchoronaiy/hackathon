@@ -1,6 +1,6 @@
 "use client";
 
-import { LocateFixed, MapPin } from "lucide-react";
+import { LocateFixed, MapPin, Search } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { GeocodeSuggestion } from "@/lib/geocode";
 import type { LatLng } from "@/lib/route-planner";
@@ -12,6 +12,9 @@ type StartSearchProps = {
   onUseMyLocation: () => void;
   locating: boolean;
   statusNote: string | null;
+  placeholder?: string;
+  ariaLabel?: string;
+  variant?: "planner" | "home";
 };
 
 export default function StartSearch({
@@ -21,6 +24,9 @@ export default function StartSearch({
   onUseMyLocation,
   locating,
   statusNote,
+  placeholder = "Start a Wander",
+  ariaLabel = "Start a Wander",
+  variant = "planner",
 }: StartSearchProps) {
   const listId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -87,18 +93,20 @@ export default function StartSearch({
     setActiveIndex(-1);
   }
 
+  const Icon = variant === "home" ? Search : MapPin;
+
   return (
-    <div className="start-block" ref={rootRef}>
+    <div className={`start-block${variant === "home" ? " is-home" : ""}`} ref={rootRef}>
       <div className="start-field">
-        <MapPin size={16} aria-hidden="true" />
+        <Icon size={16} aria-hidden="true" />
         <input
           type="search"
           name="start"
           autoComplete="off"
           spellCheck={false}
-          placeholder="Start a Wander"
+          placeholder={placeholder}
           value={value}
-          aria-label="Start a Wander"
+          aria-label={ariaLabel}
           onChange={(event) => {
             onQueryChange(event.target.value);
             setOpen(true);
@@ -125,16 +133,18 @@ export default function StartSearch({
             }
           }}
         />
-        <button
-          type="button"
-          className="start-locate"
-          onClick={onUseMyLocation}
-          disabled={locating}
-          aria-label={locating ? "Finding your location" : "Use my location"}
-          title="Use my location"
-        >
-          <LocateFixed size={16} aria-hidden="true" />
-        </button>
+        {variant === "planner" ? (
+          <button
+            type="button"
+            className="start-locate"
+            onClick={onUseMyLocation}
+            disabled={locating}
+            aria-label={locating ? "Finding your location" : "Use my location"}
+            title="Use my location"
+          >
+            <LocateFixed size={16} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
       {open && value.trim().length >= 2 && (
         <ul className="start-suggestions" id={`${listId}-list`}>

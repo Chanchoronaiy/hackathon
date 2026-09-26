@@ -12,6 +12,7 @@ export type WanderPlanInput = {
   start?: LatLng;
   startName?: string;
   exploredIds?: string[];
+  preferUnexplored?: boolean;
   weather?: Pick<WeatherSnapshot, "apparent" | "uvIndex"> | null;
 };
 
@@ -94,6 +95,7 @@ function estimatedMinutes(start: AdelaidePlace, stops: AdelaidePlace[]) {
 }
 
 function chooseWithinBudget(start: AdelaidePlace, candidates: ScoredPlace[], desiredCount: number, minutes: number) {
+  const usefulMinimum = minutes * 0.72;
   for (let count = desiredCount; count >= 1; count -= 1) {
     const valid = combinations(candidates, count)
       .map((group) => {
@@ -103,7 +105,13 @@ function chooseWithinBudget(start: AdelaidePlace, candidates: ScoredPlace[], des
         return { stops, score, duration: estimatedMinutes(start, stops) };
       })
       .filter(({ duration }) => duration <= minutes)
-      .sort((a, b) => b.score - a.score);
+      .sort((a, b) => {
+        const aFillsBudget = a.duration >= usefulMinimum;
+        const bFillsBudget = b.duration >= usefulMinimum;
+        if (aFillsBudget !== bFillsBudget) return aFillsBudget ? -1 : 1;
+        if (aFillsBudget && bFillsBudget) return b.score - a.score;
+        return b.duration - a.duration || b.score - a.score;
+      });
     if (valid[0]) return valid[0].stops;
   }
   return [candidates[0].place];
@@ -126,19 +134,33 @@ export function planWanderRoute({
   start: startPosition,
   startName,
   exploredIds = [],
+  preferUnexplored = true,
   weather = null,
 }: WanderPlanInput): WanderRoute {
   const start = resolveStart(startPosition, startName);
   const explored = new Set(exploredIds);
-  const targetStops = minutes === 15 ? 2 : minutes === 45 ? 5 : 4;
+  // More available time should produce a meaningfully longer wander. The old
+  // fixed count made 60+ minute selections look almost identical to 30 mins.
+  const targetStops = minutes <= 15
+    ? 2
+    : minutes <= 30
+      ? 4
+      : minutes <= 45
+        ? 5
+        : minutes <= 60
+          ? 6
+          : minutes <= 90
+            ? 7
+            : 8;
   const selectedInterests = new Set(interests as Interest[]);
+  const detourWeight = minutes <= 30 ? 1.8 : minutes <= 60 ? 1.2 : minutes <= 90 ? 0.75 : 0.35;
   const candidates: ScoredPlace[] = ADELAIDE_PLACES
     .filter((place) => place.category !== "calm")
     .map((place) => {
       const interestBoost = selectedInterests.has(place.category as Interest) ? 5 : 0;
-      const noveltyBoost = explored.has(place.id) ? 0 : 2.4;
+      const noveltyBoost = explored.has(place.id) ? 0 : (preferUnexplored ? 5.2 : 1.2);
       const modeScore = mode === "heat" ? place.comfort * 2.2 : place.surprise * 1.8 + interestBoost;
-      const detour = distanceKm(start.position, place.position) * 1.8;
+      const detour = distanceKm(start.position, place.position) * detourWeight;
       return {
         place,
         score: modeScore + noveltyBoost - detour,

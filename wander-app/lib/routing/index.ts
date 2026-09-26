@@ -9,13 +9,15 @@ export { gridLoopGeometry, gridRoutingAdapter, openRouteServiceAdapter };
 /** Prefer OpenRouteService when the server has a key; always fall back to the local grid. */
 export async function resolveLoopGeometry(waypoints: LatLng[]): Promise<{
   geometry: LatLng[];
+  distanceKm?: number;
+  walkingMinutes?: number;
   source: RouteGeometryAdapter["id"];
 }> {
   try {
-    const geometry = await openRouteServiceAdapter.getLoopGeometry(waypoints);
-    return { geometry, source: "openrouteservice" };
+    const route = await openRouteServiceAdapter.getLoopGeometry(waypoints);
+    return { ...route, source: "openrouteservice" };
   } catch {
-    const geometry = await gridRoutingAdapter.getLoopGeometry(waypoints);
-    return { geometry, source: "grid" };
+    const route = await gridRoutingAdapter.getLoopGeometry(waypoints);
+    return { ...route, source: "grid" };
   }
 }
