@@ -21,6 +21,7 @@ import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
 import { loadCloudTrials, removeCloudTrial, syncSavedTrial } from "@/lib/cloud-data";
 import { fetchAdelaideWeather, type WeatherSnapshot } from "@/lib/weather";
+import type { PopularPlace } from "@/lib/popularity";
 
 const WanderMap = dynamic(() => import("@/components/wander-map"), {
   ssr: false,
@@ -177,6 +178,9 @@ export default function Home() {
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [streetViewPosition, setStreetViewPosition] = useState<LatLng | null>(null);
+  const [popularPlaces, setPopularPlaces] = useState<PopularPlace[]>([]);
+  const [popularityVisible, setPopularityVisible] = useState(false);
+  const [popularityLoading, setPopularityLoading] = useState(false);
   const [homeTab, setHomeTab] = useState<"map" | "explore" | "memories" | "saved" | "friends">("map");
 
   const totalMinutes = wanderHours * 60 + wanderMinutes;
@@ -783,6 +787,18 @@ export default function Home() {
     setPlannerOpen(false);
   }
 
+  function togglePopularity() {
+    const nextVisible = !popularityVisible;
+    setPopularityVisible(nextVisible);
+    if (!nextVisible || popularPlaces.length || popularityLoading) return;
+    setPopularityLoading(true);
+    void fetch("/api/popularity")
+      .then(async (response) => response.ok ? response.json() as Promise<{ places?: PopularPlace[] }> : { places: [] })
+      .then((data) => setPopularPlaces(data.places ?? []))
+      .catch(() => setPopularPlaces([]))
+      .finally(() => setPopularityLoading(false));
+  }
+
   function openPlanner() {
     setPlannerOpen(true);
     setWalkingActive(false);
@@ -899,6 +915,7 @@ export default function Home() {
         onExploreStop={handleExploreStop}
         onExplorationPercent={setExplorationPercent}
         onStreetViewPosition={setStreetViewPosition}
+        popularPlaces={popularityVisible ? popularPlaces : []}
       />
       {streetViewPosition && (
         <StreetViewDialog
@@ -975,6 +992,16 @@ export default function Home() {
             >
               <Cloud size={18} strokeWidth={2.2} />
               <span>{fogActive ? "On" : "Off"}</span>
+            </button>
+            <button
+              type="button"
+              className={`home-rail-chip${popularityVisible ? " is-on" : ""}`}
+              aria-pressed={popularityVisible}
+              aria-label="Toggle popular places heat map"
+              onClick={togglePopularity}
+            >
+              <Map size={18} strokeWidth={2.2} />
+              <span>{popularityLoading ? "Loading" : "Popular"}</span>
             </button>
             <div className={`home-rail-quests${questsOpen ? " is-open" : ""}`}>
               <button

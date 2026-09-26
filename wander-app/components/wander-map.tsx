@@ -11,6 +11,7 @@ import {
   type MapBounds,
 } from "@/lib/exploration";
 import type { LatLng, WanderRoute } from "@/lib/route-planner";
+import { popularityScore, type PopularPlace } from "@/lib/popularity";
 
 type Clearing = { id: string; x: number; y: number; r: number };
 
@@ -213,6 +214,7 @@ export default function WanderMap({
   selectedQuestId = null,
   onSelectQuest,
   onStreetViewPosition,
+  popularPlaces = [],
   onExploreStop,
   onExplorationPercent,
 }: {
@@ -229,6 +231,7 @@ export default function WanderMap({
   selectedQuestId?: string | null;
   onSelectQuest?: (id: string) => void;
   onStreetViewPosition?: (position: LatLng) => void;
+  popularPlaces?: PopularPlace[];
   onExploreStop: (id: string) => void;
   onExplorationPercent: (percent: number) => void;
 }) {
@@ -272,6 +275,18 @@ export default function WanderMap({
             onClearings={setClearings}
             onPercent={onExplorationPercent}
           />
+          {popularPlaces.map((place) => {
+            const score = popularityScore(place);
+            return (
+              <CircleMarker
+                key={place.id}
+                center={place.position}
+                radius={14 + score * 30}
+                pathOptions={{ color: "#e9592f", fillColor: "#ffcf56", fillOpacity: 0.16 + score * 0.34, weight: 1.5, opacity: 0.7 }}
+                interactive={false}
+              />
+            );
+          })}
           {showRoute && !walkMode && (
             <Marker
               position={streetViewBuddyPosition ?? start.position}
