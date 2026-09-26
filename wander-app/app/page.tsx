@@ -16,6 +16,7 @@ import { HISTORY_SITES, type HistoryImagePair } from "@/lib/history-sites";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
+import { addTrailReview } from "@/lib/trail-reviews";
 import { recordWalkHistory, type WalkCapture } from "@/lib/walk-history";
 import { fetchAdelaideWeather, type WeatherSnapshot } from "@/lib/weather";
 
@@ -43,6 +44,7 @@ type Plan = {
   mode: Mode;
   minutes: number;
   interests: string[];
+  suggestionId?: string;
   start?: LatLng;
   startName?: string;
   preferUnexplored?: boolean;
@@ -517,6 +519,7 @@ export default function Home() {
       mode: suggestion.mode,
       minutes: nextMinutes,
       interests: suggestion.interests,
+      suggestionId: suggestion.id,
       start,
       startName,
       preferUnexplored,
@@ -998,6 +1001,7 @@ export default function Home() {
       {walkingActive && hasRoute && (
         <WalkModeChrome
           route={route}
+          reviewTrailId={activePlan?.suggestionId ?? `route:${route.title}:${route.stops.map((stop) => stop.id).join("-")}`}
           currentStopIndex={walkStopIndex}
                     locationStatus={walkLocationStatus}
                     historyMoment={walkHistoryMoment}
@@ -1007,6 +1011,11 @@ export default function Home() {
           onCapture={captureWalkMoment}
           onDismissHistoryMoment={dismissWalkHistoryMoment}
           onAnotherFact={showAnotherWalkFact}
+          onSubmitReview={(trailId, rating, comment) => addTrailReview({
+            trailId,
+            rating,
+            comment,
+          })}
           onAdvance={() => {
             const stop = route.stops[walkStopIndex];
             if (stop) handleExploreStop(stop.id);

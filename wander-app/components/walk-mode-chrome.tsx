@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Camera, Check, CornerUpRight, Images, Share, Shuffle, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, CornerUpRight, Images, Share, Shuffle, Star, X } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import type { HistoryImagePair } from "@/lib/history-sites";
@@ -8,6 +8,7 @@ import type { WanderRoute } from "@/lib/route-planner";
 
 type WalkModeChromeProps = {
   route: WanderRoute;
+  reviewTrailId: string;
   currentStopIndex: number;
   locationStatus: "locating" | "located" | "unavailable";
   historyMoment: {
@@ -25,6 +26,7 @@ type WalkModeChromeProps = {
   onCapture: () => void;
   onDismissHistoryMoment: () => void;
   onAnotherFact: () => void;
+  onSubmitReview: (trailId: string, rating: number, comment: string) => void;
   onAdvance?: () => void;
 };
 
@@ -51,6 +53,7 @@ function walkPercent(route: WanderRoute, currentStopIndex: number) {
 
 export default function WalkModeChrome({
   route,
+  reviewTrailId,
   currentStopIndex,
   locationStatus,
   historyMoment,
@@ -60,9 +63,15 @@ export default function WalkModeChrome({
   onCapture,
   onDismissHistoryMoment,
   onAnotherFact,
+  onSubmitReview,
   onAdvance,
 }: WalkModeChromeProps) {
   const [photoComparisonOpen, setPhotoComparisonOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [reviewSkipped, setReviewSkipped] = useState(false);
   const totalStops = route.stops.length;
   const done = totalStops === 0 || currentStopIndex >= totalStops;
   const nextStop = done ? null : route.stops[currentStopIndex];
@@ -203,16 +212,72 @@ export default function WalkModeChrome({
               <p>Capture a last moment, or end the walk.</p>
             </div>
           </div>
-          <div className="walk-done-actions">
-            <button type="button" className="walk-done-capture" onClick={onCapture}>
-              <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
-              Capture
-            </button>
-            <button type="button" className="walk-done-end" onClick={onBack}>
-              <Check size={18} strokeWidth={2.4} aria-hidden="true" />
-              End walk
-            </button>
-          </div>
+          {reviewSubmitted ? (
+            <output className="walk-review-thanks">
+              <strong>Thanks for helping other walkers.</strong>
+              <button type="button" className="walk-done-end" onClick={onBack}>
+                <Check size={18} strokeWidth={2.4} aria-hidden="true" /> End walk
+              </button>
+            </output>
+          ) : reviewSkipped ? (
+            <div className="walk-done-actions">
+              <button type="button" className="walk-done-capture" onClick={onCapture}>
+                <Camera size={18} strokeWidth={2.2} aria-hidden="true" /> Capture
+              </button>
+              <button type="button" className="walk-done-end" onClick={onBack}>
+                <Check size={18} strokeWidth={2.4} aria-hidden="true" /> End walk
+              </button>
+            </div>
+          ) : (
+            <form
+              className="walk-review-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (reviewRating < 1) {
+                  setReviewError("Choose a star rating first.");
+                  return;
+                }
+                if (reviewComment.trim().length < 3) {
+                  setReviewError("Add a short comment about your walk.");
+                  return;
+                }
+                onSubmitReview(reviewTrailId, reviewRating, reviewComment.trim());
+                setReviewSubmitted(true);
+                setReviewError(null);
+              }}
+            >
+              <strong>How was this walk?</strong>
+              <fieldset className="walk-review-stars">
+                <legend>Rate this walk</legend>
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <button
+                    key={rating}
+                    type="button"
+                    aria-label={`${rating} star${rating === 1 ? "" : "s"}`}
+                    aria-pressed={reviewRating === rating}
+                    onClick={() => { setReviewRating(rating); setReviewError(null); }}
+                  >
+                    <Star size={22} fill={reviewRating >= rating ? "currentColor" : "none"} />
+                  </button>
+                ))}
+              </fieldset>
+              <label className="walk-review-comment">
+                <span>Leave a tip or comment</span>
+                <textarea
+                  value={reviewComment}
+                  maxLength={300}
+                  rows={2}
+                  placeholder="What would you tell the next walker?"
+                  onChange={(event) => { setReviewComment(event.target.value); setReviewError(null); }}
+                />
+              </label>
+              {reviewError ? <p className="walk-review-error" role="alert">{reviewError}</p> : null}
+              <div className="walk-done-actions">
+                <button type="submit" className="walk-done-end">Post review</button>
+                <button type="button" className="walk-review-skip" onClick={() => setReviewSkipped(true)}>Skip review</button>
+              </div>
+            </form>
+          )}
         </aside>
       )}
     </>
