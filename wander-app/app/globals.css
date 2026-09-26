@@ -592,7 +592,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 }
 .map-style-toggle:hover { background:#fff; }
 .google-map-background {
-  position:absolute; inset:0; z-index:2; background:#ece7dc;
+  position:absolute; inset:0; z-index:420; background:#ece7dc;
 }
 .google-map-error {
   display:grid; place-items:center; padding:32px; color:var(--ink); text-align:center;
