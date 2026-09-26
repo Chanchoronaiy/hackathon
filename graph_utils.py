@@ -20,11 +20,35 @@ def load_real_graph(place_name: str):
     Load a real street network for a place (e.g. "Adelaide, Australia")
     using OSMnx. Returns a NetworkX MultiDiGraph with 'bearing' already
     computed on every edge.
+
+    Note: this geocodes place_name to a boundary polygon first, which only
+    works for names OSM actually recognizes as an administrative area
+    (e.g. a suburb or city name) - it will fail for informal names like
+    "Adelaide CBD". For a small area around a specific point instead
+    (faster, and doesn't depend on geocoding), use load_real_graph_near_point().
     """
     import osmnx as ox
+    import networkx as nx
 
     G = ox.graph_from_place(place_name, network_type="walk")
     G = ox.add_edge_bearings(G)  # adds a 'bearing' attribute to every edge
+    G.remove_edges_from(nx.selfloop_edges(G))  # not real walkable paths, and have no defined bearing
+    return G
+
+
+def load_real_graph_near_point(lat: float, lon: float, dist_m: int = 800):
+    """
+    Load a real street network within dist_m meters of a lat/lon point.
+    Faster and more reliable than load_real_graph() for a small demo area,
+    since it skips geocoding a place name to a boundary polygon entirely -
+    just downloads whatever's within the given radius of the point.
+    """
+    import osmnx as ox
+    import networkx as nx
+
+    G = ox.graph_from_point((lat, lon), dist=dist_m, network_type="walk")
+    G = ox.add_edge_bearings(G)
+    G.remove_edges_from(nx.selfloop_edges(G))  # not real walkable paths, and have no defined bearing
     return G
 
 
