@@ -15,6 +15,7 @@ import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recor
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
+import { recordWalkHistory, type WalkCapture } from "@/lib/walk-history";
 import { fetchAdelaideWeather, type WeatherSnapshot } from "@/lib/weather";
 
 const WanderMap = dynamic(() => import("@/components/wander-map"), {
@@ -27,6 +28,7 @@ const WanderMap = dynamic(() => import("@/components/wander-map"), {
 });
 
 type Mode = "discover" | "heat";
+type WalkLocationStatus = "locating" | "located" | "unavailable";
 type Plan = {
   mode: Mode;
   minutes: number;
@@ -122,15 +124,18 @@ function YourWanderSheet({
 }
 
 export default function Home() {
+  const walkStartedAtRef = useRef<string | null>(null);
+  const walkCapturesRef = useRef<WalkCapture[]>([]);
   const [mode, setMode] = useState<Mode>("discover");
   const [wanderHours, setWanderHours] = useState(0);
-  const [wanderMinutes, setWanderMinutes] = useState(0);
+  const [wanderMinutes, setWanderMinutes] = useState(15);
   const [selected, setSelected] = useState(["art", "green"]);
   const [preferUnexplored, setPreferUnexplored] = useState(true);
   const [start, setStart] = useState<LatLng | undefined>(undefined);
   const [startName, setStartName] = useState<string | undefined>(undefined);
   const [startQuery, setStartQuery] = useState("");
-  const [locationStatus, setLocationStatus] = useState<LocationStatus>("locating");
+  const [locationStatus, setLocationStatus] = useState<LocationStatus>("idle");
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const startTouchedRef = useRef(false);
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
@@ -147,6 +152,7 @@ export default function Home() {
   const [generating, setGenerating] = useState(false);
   const [wanderSheetOpen, setWanderSheetOpen] = useState(false);
   const [walkingActive, setWalkingActive] = useState(false);
+  const [walkLocationStatus, setWalkLocationStatus] = useState<WalkLocationStatus>("locating");
   const [walkStopIndex, setWalkStopIndex] = useState(0);
   const [walkPosition, setWalkPosition] = useState<LatLng | null>(null);
   const [heatEscapeOpen, setHeatEscapeOpen] = useState(false);
@@ -203,6 +209,7 @@ export default function Home() {
 
   const applyStart = useCallback((next: { label: string; position: LatLng }, options?: { fromUser?: boolean }) => {
     if (options?.fromUser) startTouchedRef.current = true;
+    setLocationMessage(null);
     setStart(next.position);
     setStartName(next.label);
     setStartQuery(next.label);
@@ -224,19 +231,24 @@ export default function Home() {
   const useMyLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setLocationStatus("idle");
+      setLocationMessage("Location is not available in this browser.");
       clearToVictoriaSquare(true);
       return;
     }
     setLocationStatus("locating");
+    setLocationMessage(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const next: LatLng = [position.coords.latitude, position.coords.longitude];
         setLocationStatus("located");
+        setLocationMessage(null);
         applyStart({ label: "Your location", position: next }, { fromUser: true });
       },
-      () => {
-        // Demo-friendly: keep Victoria Square quietly if the browser blocks us.
+      (error) => {
         setLocationStatus("idle");
+        setLocationMessage(error.code === error.PERMISSION_DENIED
+          ? "Allow location access in your browser, then try again."
+          : "Could not get your location. Check GPS and try again.");
         clearToVictoriaSquare(true);
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60_000 },
@@ -316,6 +328,7 @@ export default function Home() {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         const next: LatLng = [position.coords.latitude, position.coords.longitude];
+        setWalkLocationStatus("located");
         setWalkPosition(next);
         setExploredTrail(recordExploredPosition(next));
 
@@ -325,7 +338,7 @@ export default function Home() {
           setWalkStopIndex((current) => Math.min(route.stops.length, current + 1));
         }
       },
-      () => undefined,
+      () => setWalkLocationStatus("unavailable"),
       { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
@@ -552,6 +565,9 @@ export default function Home() {
   }
 
   function startWalk() {
+    walkStartedAtRef.current = new Date().toISOString();
+    walkCapturesRef.current = [];
+    setWalkLocationStatus(navigator.geolocation ? "locating" : "unavailable");
     setWanderSheetOpen(false);
     setWalkingActive(true);
     setWalkStopIndex(0);
@@ -563,6 +579,21 @@ export default function Home() {
   }
 
   function endWalk() {
+    if (walkStartedAtRef.current) {
+      recordWalkHistory({
+        startedAt: walkStartedAtRef.current,
+        mode: activePlan?.mode ?? mode,
+        title: route.title,
+        startName: activePlan?.startName ?? startName,
+        start: activePlan?.start ?? start,
+        stopNames: route.stops.map((stop) => stop.name),
+        walkingMinutes: route.walkingMinutes,
+        distanceKm: route.distanceKm,
+        captures: walkCapturesRef.current,
+      });
+      walkStartedAtRef.current = null;
+      walkCapturesRef.current = [];
+    }
     setWalkingActive(false);
     setWalkStopIndex(0);
     setWalkPosition(null);
@@ -579,7 +610,13 @@ export default function Home() {
 
   function captureWalkMoment() {
     const stop = route.stops[Math.min(walkStopIndex, Math.max(route.stops.length - 1, 0))];
-    if (stop) handleExploreStop(stop.id);
+    if (stop) {
+      handleExploreStop(stop.id);
+      walkCapturesRef.current = [...walkCapturesRef.current, {
+        stopName: stop.name,
+        capturedAt: new Date().toISOString(),
+      }];
+    }
     if (walkStopIndex >= route.stops.length) {
       openMemoriesScreen();
       endWalk();
@@ -755,7 +792,7 @@ export default function Home() {
       )}
 
       {memoriesOpen && !fogActive && (
-        <MemoriesScreen onAddMemory={() => openPlanner()} />
+        <MemoriesScreen />
       )}
 
       {friendsOpen && !fogActive && (
@@ -798,7 +835,7 @@ export default function Home() {
                   onSelect={(suggestion) => applyStart(suggestion, { fromUser: true })}
                   onUseMyLocation={useMyLocation}
                   locating={locationStatus === "locating"}
-                  statusNote={null}
+                  statusNote={locationMessage}
                 />
                 <fieldset className="mode-switch" aria-label="Route mode">
                   <button className={mode === "discover" ? "active" : ""} onClick={() => setMode("discover")} type="button"><Leaf size={18} /> Discover</button>
@@ -887,6 +924,7 @@ export default function Home() {
         <WalkModeChrome
           route={route}
           currentStopIndex={walkStopIndex}
+                    locationStatus={walkLocationStatus}
           explorationPercent={explorationPercent}
           onBack={endWalk}
           onShare={shareWalk}

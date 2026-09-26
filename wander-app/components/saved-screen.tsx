@@ -1,7 +1,22 @@
 "use client";
 
-import { Bookmark } from "lucide-react";
+import { Bookmark, Camera, Footprints } from "lucide-react";
+import { useMemo, useSyncExternalStore } from "react";
 import type { SavedTrial } from "@/lib/saved-trials";
+import { readWalkHistory, WALK_HISTORY_EVENT, type WalkHistoryEntry } from "@/lib/walk-history";
+
+function subscribeToWalkHistory(onChange: () => void) {
+  window.addEventListener(WALK_HISTORY_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(WALK_HISTORY_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+
+function getWalkHistorySnapshot() {
+  return JSON.stringify(readWalkHistory());
+}
 
 export function savedTrialTitle(trial: SavedTrial) {
   if (trial.title?.trim()) return trial.title.trim();
@@ -36,6 +51,9 @@ export default function SavedScreen({
   onRemoveTrial,
   note,
 }: SavedScreenProps) {
+  const historyData = useSyncExternalStore(subscribeToWalkHistory, getWalkHistorySnapshot, () => "[]");
+  const walkHistory = useMemo(() => JSON.parse(historyData) as WalkHistoryEntry[], [historyData]);
+
   return (
     <section className="saved-screen" aria-labelledby="saved-screen-title">
       <header className="saved-screen-header">
@@ -45,6 +63,42 @@ export default function SavedScreen({
 
       {note ? <p className="saved-screen-note">{note}</p> : null}
 
+      <section className="saved-history" aria-labelledby="saved-history-title">
+        <div className="saved-section-heading">
+          <h2 id="saved-history-title">Walk history</h2>
+          <span>{walkHistory.length} {walkHistory.length === 1 ? "walk" : "walks"}</span>
+        </div>
+        {walkHistory.length === 0 ? (
+          <div className="saved-history-empty">
+            <Footprints size={20} aria-hidden="true" />
+            <span>Your walks and captured stops will appear here when you end a walk.</span>
+          </div>
+        ) : (
+          <ul className="saved-history-list">
+            {walkHistory.map((walk) => (
+              <li key={walk.id} className="saved-history-item">
+                <div className="saved-history-icon" aria-hidden="true"><Footprints size={18} /></div>
+                <div className="saved-history-copy">
+                  <strong>{walk.title}</strong>
+                  <span>{new Date(walk.endedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} · {walk.distanceKm.toFixed(1)} km · {walk.walkingMinutes} min</span>
+                  <span>{walk.stopNames.length} stops · {walk.mode === "heat" ? "Beat the Heat" : "Discover"}</span>
+                  {walk.captures.length > 0 ? (
+                    <span className="saved-history-captures">
+                      <Camera size={14} aria-hidden="true" />
+                      Captured: {walk.captures.map((capture) => capture.stopName).join(", ")}
+                    </span>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <div className="saved-section-heading saved-routes-heading">
+        <h2>Saved routes</h2>
+        <span>{trials.length} {trials.length === 1 ? "route" : "routes"}</span>
+      </div>
       {trials.length === 0 ? (
         <div className="saved-screen-empty">
           <Bookmark size={26} />

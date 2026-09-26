@@ -6,6 +6,7 @@ import type { WanderRoute } from "@/lib/route-planner";
 type WalkModeChromeProps = {
   route: WanderRoute;
   currentStopIndex: number;
+  locationStatus: "locating" | "located" | "unavailable";
   explorationPercent: number;
   onBack: () => void;
   onShare: () => void;
@@ -37,6 +38,7 @@ function walkPercent(route: WanderRoute, currentStopIndex: number) {
 export default function WalkModeChrome({
   route,
   currentStopIndex,
+  locationStatus,
   explorationPercent,
   onBack,
   onShare,
@@ -77,6 +79,14 @@ export default function WalkModeChrome({
         </div>
         <strong className="walk-progress-pct">{progress}%</strong>
       </div>
+      <p className={`walk-location-status is-${locationStatus}`} aria-live="polite">
+        <span aria-hidden="true" />
+        {locationStatus === "located"
+          ? "Live location on"
+          : locationStatus === "locating"
+            ? "Finding your location…"
+            : "Live location unavailable. Check browser location permission; progress is estimated."}
+      </p>
 
       <button type="button" className="walk-capture" onClick={onCapture}>
         <Camera size={22} strokeWidth={2.2} aria-hidden="true" />
