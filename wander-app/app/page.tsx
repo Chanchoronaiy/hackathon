@@ -9,6 +9,7 @@ import FriendsScreen from "@/components/friends-screen";
 import LeaderboardScreen from "@/components/leaderboard-screen";
 import MemoriesScreen from "@/components/memories-screen";
 import SavedScreen from "@/components/saved-screen";
+import WalkMemoryDialog from "@/components/walk-memory-dialog";
 import WalkModeChrome from "@/components/walk-mode-chrome";
 import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
@@ -29,7 +30,8 @@ import {
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
-import { loadCloudTrials, removeCloudTrial, syncSavedTrial } from "@/lib/cloud-data";
+import { loadCloudTrials, removeCloudTrial, syncSavedTrial, syncWalkMemory } from "@/lib/cloud-data";
+import { ALREADY_SAVED_MESSAGE, createId, getMemoryForWalk, hasSeenMemoryRule, markMemoryRuleSeen, saveWalkMemory } from "@/lib/walk-memories";
 import { fetchAdelaideWeather, type WeatherSnapshot } from "@/lib/weather";
 import type { PopularPlace } from "@/lib/popularity";
 
@@ -189,6 +191,17 @@ export default function Home() {
   const [walkingActive, setWalkingActive] = useState(false);
   const [walkStopIndex, setWalkStopIndex] = useState(0);
   const [walkPosition, setWalkPosition] = useState<LatLng | null>(null);
+  // Each walk gets a unique id; its one memory (photo) records that id. Restarting the
+  // same generated plan before finishing it resumes the same walk. (Not loopKey: that
+  // changes as stops are explored, even though it's the same route.)
+  const [walkId, setWalkId] = useState<string | null>(null);
+  const [walkPlan, setWalkPlan] = useState<Plan | null>(null);
+  const [walkMemorySaved, setWalkMemorySaved] = useState(false);
+  const [memoryStep, setMemoryStep] = useState<"intro" | "preview" | null>(null);
+  const [memoryPhoto, setMemoryPhoto] = useState<{ file: File; url: string } | null>(null);
+  const [memorySaving, setMemorySaving] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+  const memoryInputRef = useRef<HTMLInputElement>(null);
   const [heatEscapeOpen, setHeatEscapeOpen] = useState(false);
   const [heatEscape, setHeatEscape] = useState<{ shade: number } | null>(null);
   const [savedOpen, setSavedOpen] = useState(false);
@@ -955,6 +968,11 @@ export default function Home() {
   function startWalk() {
     setWanderSheetOpen(false);
     setWalkingActive(true);
+    if (!walkId || !activePlan || walkPlan !== activePlan) {
+      setWalkId(createId("walk"));
+      setWalkPlan(activePlan);
+      setWalkMemorySaved(false);
+    }
     setWalkStopIndex(0);
     setWalkPosition(null);
     setFogActive(false);
@@ -972,6 +990,8 @@ export default function Home() {
 
   function finishWalk() {
     setWalkingActive(false);
+    setWalkId(null);
+    setWalkPlan(null);
     setWalkStopIndex(0);
     setWalkPosition(null);
     clearUnusedRoute();
@@ -979,11 +999,72 @@ export default function Home() {
     window.setTimeout(() => setCelebratingFinish(false), 1800);
   }
 
+  // Must run inside the button's click so mobile browsers allow the camera to open.
+  function openMemoryCamera() {
+    const input = memoryInputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.click();
+  }
+
   function captureWalkMoment() {
+    if (walkMemorySaved || !walkId) return;
+    if (!hasSeenMemoryRule()) {
+      setMemoryStep("intro");
+      return;
+    }
+    openMemoryCamera();
+  }
+
+  function closeMemoryDialog() {
+    if (memorySaving) return;
+    if (memoryPhoto) URL.revokeObjectURL(memoryPhoto.url);
+    setMemoryPhoto(null);
+    setMemoryError(null);
+    setMemoryStep(null);
+  }
+
+  function handleMemoryPhoto(file: File | undefined) {
+    if (!file) return;
+    if (memoryPhoto) URL.revokeObjectURL(memoryPhoto.url);
+    setMemoryPhoto({ file, url: URL.createObjectURL(file) });
+    setMemoryError(null);
+    setMemoryStep("preview");
+  }
+
+  async function keepWalkMemory() {
+    if (!walkId || !memoryPhoto || memorySaving) return;
+    setMemorySaving(true);
+    setMemoryError(null);
     const stop = displayRoute.stops[Math.min(walkStopIndex, Math.max(displayRoute.stops.length - 1, 0))];
+    const details = { walkId, routeTitle: displayRoute.title, stopId: stop?.id, stopName: stop?.name, photo: memoryPhoto.file };
+    // Check local storage first so a walk that already has a memory never uploads another.
+    if (await getMemoryForWalk(walkId)) {
+      setMemorySaving(false);
+      setWalkMemorySaved(true);
+      setMemoryError(ALREADY_SAVED_MESSAGE);
+      return;
+    }
+    // When Supabase is configured, its unique (user_id, walk_id) constraint is the final word.
+    const cloud = await syncWalkMemory(details).catch(() => "error" as const);
+    if (cloud === "duplicate") {
+      setMemorySaving(false);
+      setWalkMemorySaved(true);
+      setMemoryError("This walk already has a memory saved to your account. One memory per walk, so make it count.");
+      return;
+    }
+    const result = await saveWalkMemory(details);
+    setMemorySaving(false);
+    if (!result.ok) {
+      if (result.reason === "already-saved") setWalkMemorySaved(true);
+      setMemoryError(result.message);
+      return;
+    }
     if (stop) handleExploreStop(stop.id);
-    exitWalk();
-    openMemoriesScreen();
+    setWalkMemorySaved(true);
+    URL.revokeObjectURL(memoryPhoto.url);
+    setMemoryPhoto(null);
+    setMemoryStep(null);
   }
 
   function goHomeTab(tab: typeof homeTab) {
@@ -1483,11 +1564,42 @@ export default function Home() {
           onBack={exitWalk}
           onFinish={finishWalk}
           onCapture={captureWalkMoment}
+          memorySaved={walkMemorySaved}
           onAdvance={() => {
             const stop = displayRoute.stops[walkStopIndex];
             if (stop) handleExploreStop(stop.id);
             setWalkStopIndex((current) => Math.min(displayRoute.stops.length, current + 1));
           }}
+        />
+      )}
+
+      {walkingActive && hasRoute && (
+        <input
+          ref={memoryInputRef}
+          className="walk-memory-input"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(event) => handleMemoryPhoto(event.target.files?.[0])}
+        />
+      )}
+
+      {memoryStep && (
+        <WalkMemoryDialog
+          step={memoryStep}
+          previewUrl={memoryPhoto?.url ?? null}
+          saving={memorySaving}
+          error={memoryError}
+          onOpenCamera={() => {
+            markMemoryRuleSeen();
+            setMemoryStep(null);
+            openMemoryCamera();
+          }}
+          onRetake={openMemoryCamera}
+          onKeep={() => void keepWalkMemory()}
+          onClose={closeMemoryDialog}
         />
       )}
 

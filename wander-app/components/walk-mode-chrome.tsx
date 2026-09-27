@@ -10,6 +10,8 @@ type WalkModeChromeProps = {
   onFinish: () => void;
   onCapture: () => void;
   onAdvance?: () => void;
+  /** This walk's one memory is already saved. */
+  memorySaved?: boolean;
 };
 
 function remainingMinutes(route: WanderRoute, currentStopIndex: number) {
@@ -40,6 +42,7 @@ export default function WalkModeChrome({
   onFinish,
   onCapture,
   onAdvance,
+  memorySaved = false,
 }: WalkModeChromeProps) {
   const totalStops = route.stops.length;
   const done = totalStops === 0 || currentStopIndex >= totalStops;
@@ -69,9 +72,15 @@ export default function WalkModeChrome({
         <strong className="walk-progress-pct">{progress}%</strong>
       </div>
 
-      <button type="button" className="walk-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
-        <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
-      </button>
+      {memorySaved ? (
+        <button type="button" className="walk-capture is-saved" disabled>
+          Memory saved ✓
+        </button>
+      ) : (
+        <button type="button" className="walk-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
+          <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
+        </button>
+      )}
 
       {nextStop ? (
         <aside className="walk-next-card">
@@ -98,14 +107,20 @@ export default function WalkModeChrome({
           <div className="walk-next-row is-done">
             <div className="walk-next-copy">
               <strong>You’re back near the start</strong>
-              <p>Capture a last moment, or end the walk.</p>
+              <p>{memorySaved ? "Your memory is saved. End the walk when you\u2019re ready." : "Capture a last moment, or end the walk."}</p>
             </div>
           </div>
           <div className="walk-done-actions">
-            <button type="button" className="walk-done-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
-              <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
-              Capture
-            </button>
+            {memorySaved ? (
+              <button type="button" className="walk-done-capture is-saved" disabled>
+                Memory saved ✓
+              </button>
+            ) : (
+              <button type="button" className="walk-done-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
+                <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
+                Capture
+              </button>
+            )}
             <button type="button" className="walk-done-end" onClick={onFinish}>
               <Check size={18} strokeWidth={2.4} aria-hidden="true" />
               End walk

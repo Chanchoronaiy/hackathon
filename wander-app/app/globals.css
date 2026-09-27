@@ -1605,6 +1605,25 @@ button,input { font:inherit; } button { cursor:pointer; }
 .walk-done-capture {
   background:#dfe8d6; color:#3f4a2e;
 }
+/* One memory per walk: capture buttons once this walk's memory is saved */
+.walk-capture.is-saved {
+  padding:8px; background:#dfe8d6; color:#3f4a2e; box-shadow:0 8px 20px rgba(36,30,31,.12);
+  font-size:11px; line-height:1.2; text-align:center; cursor:default;
+}
+.walk-done-capture.is-saved { cursor:default; }
+.walk-memory-card { position:relative; inset:auto; margin:0; color:var(--ink); background:var(--paper); }
+.walk-memory-input { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.walk-memory-preview {
+  display:block; width:100%; max-height:min(52svh,420px); margin:14px 0 4px;
+  object-fit:cover; border-radius:18px; background:rgba(15,18,15,.06);
+}
+.walk-memory-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px; }
+.walk-memory-actions .checkin-verify { margin-top:0; }
+.walk-memory-retake {
+  padding:14px; border:1px solid rgba(15,18,15,.18); border-radius:15px;
+  background:white; color:var(--ink); font-weight:850;
+}
+.walk-memory-retake:disabled { opacity:.45; }
 .walk-done-end {
   background:var(--sage); color:#fffceb;
 }
