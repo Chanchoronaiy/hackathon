@@ -153,7 +153,7 @@ function ensureRouteLayers(map: MapLibreMap, colour: string, fogActive: boolean)
         "circle-color": [
           "case",
           ["get", "explored"],
-          "#fff9d6",
+          "#fffdf2",
           ["get", "colour"],
         ],
       },
@@ -327,8 +327,7 @@ export default function WanderMap({
               </g>
             </mask>
           </defs>
-          <rect width="100%" height="100%" fill="rgba(58, 92, 48, 0.62)" mask="url(#wander-fog-mask)" />
-          <rect width="100%" height="100%" fill="rgba(216, 255, 100, 0.22)" mask="url(#wander-fog-mask)" />
+          <rect width="100%" height="100%" fill="#a6a5ad" fillOpacity={0.72} mask="url(#wander-fog-mask)" />
         </svg>
       )}
       <div className="map-caption">
