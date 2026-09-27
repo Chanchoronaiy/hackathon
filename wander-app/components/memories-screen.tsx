@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
-import { Building2, Camera, Circle, Coffee, Landmark, Trees, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { Building2, Camera, Circle, Coffee, Landmark, Trees, Trash2, X } from "lucide-react";
+import { listWalkMemories, MEMORIES_CHANGED_EVENT } from "@/lib/walk-memories";
 
 type MomentTone = "sage" | "sand" | "blue" | "lavender" | "olive" | "clay";
 type MomentIcon = "tree" | "coffee" | "building" | "bridge" | "bench" | "circles" | "lamp";
@@ -47,17 +48,35 @@ function getPhotoSnapshot() {
   return localStorage.getItem(PHOTO_STORAGE_KEY) ?? "[]";
 }
 
-async function compressPhoto(file: File): Promise<string> {
-  const image = await createImageBitmap(file);
-  const scale = Math.min(1, 1200 / Math.max(image.width, image.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(image.width * scale);
-  canvas.height = Math.round(image.height * scale);
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Could not prepare this photo.");
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  image.close();
-  return canvas.toDataURL("image/jpeg", 0.78);
+type Highlight = { id: string; url: string; label: string; date: string };
+
+function useWalkHighlights() {
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  useEffect(() => {
+    let active = true;
+    let urls: string[] = [];
+    const load = async () => {
+      const memories = await listWalkMemories();
+      if (!active) return;
+      urls.forEach((url) => URL.revokeObjectURL(url));
+      const next = memories.map((memory) => ({
+        id: memory.id,
+        url: URL.createObjectURL(memory.photo),
+        label: memory.stopName || memory.routeTitle || "Wander",
+        date: new Date(memory.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }),
+      }));
+      urls = next.map((item) => item.url);
+      setHighlights(next);
+    };
+    void load();
+    window.addEventListener(MEMORIES_CHANGED_EVENT, load);
+    return () => {
+      active = false;
+      window.removeEventListener(MEMORIES_CHANGED_EVENT, load);
+      urls.forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
+  return highlights;
 }
 
 const MONTHS: MonthGroup[] = [
@@ -129,50 +148,15 @@ function MomentGlyph({ icon }: { icon: MomentIcon }) {
 }
 
 export default function MemoriesScreen() {
-  const photoInputRef = useRef<HTMLInputElement>(null);
   const photoData = useSyncExternalStore(subscribeToPhotos, getPhotoSnapshot, () => "[]");
   const photos = useMemo(
     () => (JSON.parse(photoData) as PhotoMemory[]).map((photo) => ({ ...photo, monthId: photo.monthId ?? MONTHS[0].id })),
     [photoData],
   );
-  const [targetMonthId, setTargetMonthId] = useState(MONTHS[0].id);
   const [photoError, setPhotoError] = useState<string | null>(null);
-
-  async function handlePhotoSelection(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.currentTarget.files ?? []);
-    event.currentTarget.value = "";
-    if (files.length === 0) return;
-
-    try {
-      const imageFiles = files.filter((file) => file.type.startsWith("image/"));
-      const targetMonth = MONTHS.find((month) => month.id === targetMonthId) ?? MONTHS[0];
-      const usedSlots = photos.filter((photo) => photo.monthId === targetMonth.id).length;
-      const availableSlots = targetMonth.moments.length - usedSlots;
-      if (imageFiles.length === 0) {
-        setPhotoError("Choose an image file to add a memory.");
-        return;
-      }
-      if (availableSlots <= 0) {
-        setPhotoError(`${targetMonth.title} has no empty photo slots. Choose another month.`);
-        return;
-      }
-      const filesToAdd = imageFiles.slice(0, availableSlots);
-      const addedPhotos = await Promise.all(filesToAdd.map(async (file) => ({
-        id: crypto.randomUUID(),
-        createdAt: new Date().toISOString(),
-        monthId: targetMonthId,
-        src: await compressPhoto(file),
-      })));
-      const nextPhotos = [...photos, ...addedPhotos];
-      localStorage.setItem(PHOTO_STORAGE_KEY, JSON.stringify(nextPhotos));
-      window.dispatchEvent(new Event(PHOTO_CHANGE_EVENT));
-      setPhotoError(filesToAdd.length < imageFiles.length
-        ? `Added ${filesToAdd.length} photo${filesToAdd.length === 1 ? "" : "s"}. ${targetMonth.title} has no more empty slots.`
-        : null);
-    } catch {
-      setPhotoError("Could not save the photo. Try a smaller image or remove browser storage data.");
-    }
-  }
+  const highlights = useWalkHighlights();
+  const [viewingIndex, setViewingIndex] = useState<number | null>(null);
+  const viewing = viewingIndex != null ? highlights[viewingIndex] : null;
 
   function handleDeletePhoto(photoId: string) {
     try {
@@ -196,28 +180,66 @@ export default function MemoriesScreen() {
 
       <p className="memories-stats">22 memories · 11 walks · 27 km</p>
 
-      <input
-        ref={photoInputRef}
-        className="memories-photo-input"
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={handlePhotoSelection}
-        aria-label="Choose photos to add to Memories"
-      />
-      <div className="memories-add-row">
-        <label className="memories-month-target">
-          <span>Add to</span>
-          <select aria-label="Choose a month for this memory" value={targetMonthId} onChange={(event) => setTargetMonthId(event.target.value)}>
-            {MONTHS.map((month) => <option key={month.id} value={month.id}>{month.title}</option>)}
-          </select>
-        </label>
-        <button type="button" className="memories-add" onClick={() => photoInputRef.current?.click()}>
-          <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
-          <span>Add a memory</span>
-        </button>
+      <div className="memories-highlights" role="list" aria-label="Walk memories">
+        {highlights.length > 0 ? highlights.map((highlight, index) => (
+          <button
+            key={highlight.id}
+            type="button"
+            role="listitem"
+            className="memories-highlight"
+            aria-label={`Open memory from ${highlight.label}, ${highlight.date}`}
+            onClick={() => setViewingIndex(index)}
+          >
+            <span className="memories-highlight-ring">
+              <img src={highlight.url} alt="" />
+            </span>
+            <span className="memories-highlight-label">{highlight.label}</span>
+          </button>
+        )) : (
+          <div className="memories-highlight is-empty" role="listitem">
+            <span className="memories-highlight-ring"><Camera size={22} strokeWidth={2} aria-hidden="true" /></span>
+            <span className="memories-highlight-label">Capture on a walk</span>
+          </div>
+        )}
       </div>
       {photoError ? <output className="memories-photo-error">{photoError}</output> : null}
+
+      {viewing ? (
+        <div className="memory-viewer" role="dialog" aria-modal="true" aria-label={`Memory from ${viewing.label}`}>
+          <div className="memory-viewer-bars" aria-hidden="true">
+            {highlights.map((highlight, index) => (
+              <span key={highlight.id} className={index <= (viewingIndex ?? 0) ? "is-seen" : ""} />
+            ))}
+          </div>
+          <div className="memory-viewer-stage">
+            <img src={viewing.url} alt={`Memory from ${viewing.label}`} />
+            <button
+              type="button"
+              className="memory-viewer-tap is-prev"
+              aria-label="Previous memory"
+              onClick={() => setViewingIndex((current) => Math.max(0, (current ?? 0) - 1))}
+            />
+            <button
+              type="button"
+              className="memory-viewer-tap is-next"
+              aria-label="Next memory"
+              onClick={() => setViewingIndex((current) => {
+                const next = (current ?? 0) + 1;
+                return next >= highlights.length ? null : next;
+              })}
+            />
+          </div>
+          <div className="memory-viewer-caption">
+            <div>
+              <strong>{viewing.label}</strong>
+              <span>{viewing.date}</span>
+            </div>
+            <button type="button" className="memory-viewer-close" aria-label="Close memory" onClick={() => setViewingIndex(null)}>
+              <X size={20} strokeWidth={2.4} />
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {MONTHS.map((month) => {
         const monthPhotos = photos.filter((photo) => photo.monthId === month.id);

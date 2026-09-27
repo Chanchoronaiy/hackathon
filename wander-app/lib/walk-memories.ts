@@ -24,6 +24,7 @@ export type SaveMemoryResult =
 const DB_NAME = "wander-memories";
 const STORE = "memories";
 const RULE_SEEN_KEY = "wander:memory-rule-seen";
+export const MEMORIES_CHANGED_EVENT = "wander:memories";
 
 export const ALREADY_SAVED_MESSAGE = "This walk already has its memory. One memory per walk, so make it count.";
 
@@ -83,6 +84,23 @@ export async function getMemoryForWalk(walkId: string): Promise<WalkMemory | nul
   }
 }
 
+/** Every walk memory on this device, newest first. */
+export async function listWalkMemories(): Promise<WalkMemory[]> {
+  try {
+    const db = await openDb();
+    const memories = await new Promise<WalkMemory[]>((resolve, reject) => {
+      const tx = db.transaction(STORE, "readonly");
+      tx.oncomplete = () => db.close();
+      const request = tx.objectStore(STORE).getAll();
+      request.onsuccess = () => resolve((request.result as WalkMemory[]) ?? []);
+      request.onerror = () => reject(request.error);
+    });
+    return memories.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  } catch {
+    return [];
+  }
+}
+
 /** Saves the walk's one memory. Checks first, and the unique index rejects a race or repeat. */
 export async function saveWalkMemory(input: Omit<WalkMemory, "id" | "createdAt">): Promise<SaveMemoryResult> {
   let db: IDBDatabase;
@@ -112,7 +130,10 @@ export async function saveWalkMemory(input: Omit<WalkMemory, "id" | "createdAt">
         return;
       }
       const add = store.add(memory);
-      add.onsuccess = () => resolve({ ok: true, memory });
+      add.onsuccess = () => {
+        resolve({ ok: true, memory });
+        window.dispatchEvent(new Event(MEMORIES_CHANGED_EVENT));
+      };
       add.onerror = (event) => {
         event.preventDefault();
         resolve(add.error?.name === "ConstraintError"

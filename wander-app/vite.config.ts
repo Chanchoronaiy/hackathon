@@ -34,7 +34,19 @@ const localBindingConfig = {
     : [],
 };
 
+// Vercel builds (and local `NITRO_PRESET=vercel` builds) go through Nitro instead of Workers.
+const buildForNitro = Boolean(process.env.VERCEL || process.env.NITRO_PRESET);
+
 export default defineConfig(async () => {
+  if (buildForNitro) {
+    const { nitro } = await import('nitro/vite');
+    const { default: tailwindVite } = await import('@tailwindcss/vite');
+    // Nitro's server environments can't resolve `@import 'tailwindcss'` through PostCSS.
+    return {
+      plugins: [tailwindVite(), vinext(), nitro()],
+    };
+  }
+
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= 'false';
