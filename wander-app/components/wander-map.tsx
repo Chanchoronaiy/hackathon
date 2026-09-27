@@ -209,7 +209,7 @@ function StopMarker({
       radius={explored ? 9 : 8}
       pathOptions={{
         color: "#0f1210",
-        fillColor: explored ? "#f7f3ea" : colour,
+        fillColor: explored ? "#fff9d6" : colour,
         fillOpacity: 1,
         weight: 3,
         opacity: 0.95,
@@ -266,7 +266,7 @@ export default function WanderMap({
   onSelectOptionalStop?: (id: string) => void;
   onExplorationPercent: (percent: number) => void;
 }) {
-  const colour = walkMode ? "#e07045" : mode === "discover" ? "#d8ff64" : "#ffe08a";
+  const colour = walkMode ? "#d8a2a2" : mode === "discover" ? "#8ea66b" : "#ffe08a";
   const start = route.start;
   const explored = useMemo(() => new Set(exploredIds), [exploredIds]);
   const [clearings, setClearings] = useState<Clearing[]>([]);
@@ -366,7 +366,7 @@ export default function WanderMap({
                 <Polyline
                   positions={route.optionalGeometry}
                   pathOptions={{
-                    color: optionalRouteActive ? "#5f7a45" : "#4a504a",
+                    color: optionalRouteActive ? "#8ea66b" : "#4a504a",
                     weight: optionalRouteActive ? 6 : 5,
                     opacity: fogActive ? 0.4 : optionalRouteActive ? 0.95 : 0.88,
                     dashArray: "10 12",

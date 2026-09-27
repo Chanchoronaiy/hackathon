@@ -112,77 +112,73 @@ export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: Ex
         ))}
       </div>
 
-      <div className="explore-block">
-        <div className="explore-section-head">
-          <h2>Suggested near you</h2>
-          <button type="button" className="explore-see-all">See all</button>
-        </div>
-
-        <div className="explore-suggest-scroller">
-          {suggestions.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className="explore-suggest-card"
-              aria-label={`Open ${item.title}`}
-              onClick={() => onOpenSuggestion(item)}
-            >
-              <span className={`explore-suggest-map is-${item.accent}`} aria-hidden="true" />
-              <span className="explore-suggest-body">
-                <span className="explore-suggest-rating">
-                  <Star size={13} fill="currentColor" aria-hidden="true" />
-                  {item.rating.toFixed(1)} ({item.reviews})
-                </span>
-                <strong>{item.title}</strong>
-                <span className="explore-suggest-meta">
-                  {item.distanceKm.toFixed(1)} km · {item.minutes} min
-                </span>
-                <span className="explore-suggest-tags">
-                  {item.tags.map((tag) => (
-                    <span key={tag}>{tag}</span>
-                  ))}
-                </span>
-              </span>
-            </button>
-          ))}
-          {suggestions.length === 0 ? (
-            <p className="explore-empty">No routes match that search.</p>
-          ) : null}
-        </div>
+      <div className="explore-section-head">
+        <h2>Suggested near you</h2>
+        <button type="button" className="explore-see-all">See all</button>
       </div>
 
-      <div className="explore-block">
-        <div className="explore-section-head">
-          <h2>Popular collections</h2>
-          <span className="explore-place">Adelaide</span>
-        </div>
+      <div className="explore-suggest-scroller">
+        {suggestions.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className="explore-suggest-card"
+            aria-label={`Open ${item.title}`}
+            onClick={() => onOpenSuggestion(item)}
+          >
+            <span className={`explore-suggest-map is-${item.accent}`} aria-hidden="true" />
+            <span className="explore-suggest-body">
+              <span className="explore-suggest-rating">
+                <Star size={13} fill="currentColor" aria-hidden="true" />
+                {item.rating.toFixed(1)} ({item.reviews})
+              </span>
+              <strong>{item.title}</strong>
+              <span className="explore-suggest-meta">
+                {item.distanceKm.toFixed(1)} km · {item.minutes} min
+              </span>
+              <span className="explore-suggest-tags">
+                {item.tags.map((tag) => (
+                  <span key={tag}>{tag}</span>
+                ))}
+              </span>
+            </span>
+          </button>
+        ))}
+        {suggestions.length === 0 ? (
+          <p className="explore-empty">No routes match that search.</p>
+        ) : null}
+      </div>
 
-        <div className="explore-collections">
-          <button
-            type="button"
-            className="explore-collection is-coffee"
-            onClick={() => onOpenCollection?.("coffee")}
-          >
-            <span className="explore-collection-icon" aria-hidden="true"><Coffee size={18} /></span>
-            <span className="explore-collection-copy">
-              <strong>Best laneway coffee</strong>
-              <span>7 routes · Curated by locals</span>
-            </span>
-            <ChevronRight size={18} aria-hidden="true" />
-          </button>
-          <button
-            type="button"
-            className="explore-collection is-heritage"
-            onClick={() => onOpenCollection?.("heritage")}
-          >
-            <span className="explore-collection-icon" aria-hidden="true"><MapPin size={18} /></span>
-            <span className="explore-collection-copy">
-              <strong>North Adelaide heritage</strong>
-              <span>5 routes · 112 saves</span>
-            </span>
-            <ChevronRight size={18} aria-hidden="true" />
-          </button>
-        </div>
+      <div className="explore-section-head">
+        <h2>Popular collections</h2>
+        <span className="explore-place">Adelaide</span>
+      </div>
+
+      <div className="explore-collections">
+        <button
+          type="button"
+          className="explore-collection is-coffee"
+          onClick={() => onOpenCollection?.("coffee")}
+        >
+          <span className="explore-collection-icon" aria-hidden="true"><Coffee size={18} /></span>
+          <span className="explore-collection-copy">
+            <strong>Best laneway coffee</strong>
+            <span>7 routes · Curated by locals</span>
+          </span>
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>
+        <button
+          type="button"
+          className="explore-collection is-heritage"
+          onClick={() => onOpenCollection?.("heritage")}
+        >
+          <span className="explore-collection-icon" aria-hidden="true"><MapPin size={18} /></span>
+          <span className="explore-collection-copy">
+            <strong>North Adelaide heritage</strong>
+            <span>5 routes · 112 saves</span>
+          </span>
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>
       </div>
     </section>
   );
