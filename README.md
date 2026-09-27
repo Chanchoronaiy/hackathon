@@ -6,12 +6,11 @@
 
 **Turn spare minutes into a walk through exciting spots to wind your mind down.**
 
-Wander is a mobile-first walking app for Adelaide. Pick a start point, walking time and interests, then receive a walkable route with local places, history and optional quests. Completing walks clears your exploration fog, saves memories and earns points on the leaderboard.
+Wander is a mobile app that curates routes for users through multiple places using their interest and their time available. Wander includes random daily quests for user to earn extra points that determines their ranking on the friends and global leaderboard. Completing walks clears your exploration fog, capture moments, saves memories and use it's cute mascot to get a street view of where you could potentially head to next. 
 
 ## What it does
 
-- Builds walking loops from the user’s location, with Victoria Square as a fallback.
-- Uses foot-walking directions when an openrouteservice key is available; otherwise it uses a local route fallback.
+- Builds walking routes from the user’s location.
 - Lets people tailor a walk around art, coffee and green space, or use the Beat the Heat mode.
 - Shows local history, saved walks, before-and-after place memories, friend requests and leaderboards.
 - Awards **10 points for each minute walked** when a walk is finished.
