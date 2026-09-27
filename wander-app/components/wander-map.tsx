@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
 import { CircleMarker, MapContainer, Marker, Pane, Polyline, Popup, Rectangle, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { POI_DATA_TIMESTAMP } from "@/lib/adelaide-data";
+import { HISTORY_SITES } from "@/lib/history-sites";
 import {
   EXPLORATION_RADIUS_M,
   estimateViewportExplorationPercent,
@@ -95,12 +96,12 @@ function CreamWash() {
   );
 }
 
-function Recenter({ position, zoom }: { position: LatLng; zoom?: number }) {
+function Recenter({ position, zoom, animate = true }: { position: LatLng; zoom?: number; animate?: boolean }) {
   const map = useMap();
   const key = position.join(",");
   useEffect(() => {
-    map.setView(position, zoom ?? map.getZoom(), { animate: true });
-  }, [map, key, position, zoom]);
+    map.setView(position, zoom ?? map.getZoom(), { animate });
+  }, [map, key, position, zoom, animate]);
   return null;
 }
 
@@ -125,6 +126,19 @@ function FitPositions({ positions, enabled }: { positions: LatLng[]; enabled: bo
     }
     map.fitBounds(positions, { padding: [80, 100], maxZoom: 15, animate: true });
   }, [map, key, enabled, positions]);
+  return null;
+}
+
+function FitHistorySites({ enabled }: { enabled: boolean }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!enabled) return;
+    map.fitBounds(HISTORY_SITES.map((site) => site.position), {
+      padding: [64, 64],
+      maxZoom: 14,
+      animate: true,
+    });
+  }, [enabled, map]);
   return null;
 }
 
@@ -232,6 +246,7 @@ export default function WanderMap({
   exploredIds,
   exploredTrail,
   fogActive,
+  historyLayer = false,
   showRoute,
   walkMode = false,
   walkStopIndex = 0,
@@ -251,6 +266,7 @@ export default function WanderMap({
   exploredIds: string[];
   exploredTrail: LatLng[];
   fogActive: boolean;
+  historyLayer?: boolean;
   showRoute: boolean;
   walkMode?: boolean;
   walkStopIndex?: number;
@@ -307,7 +323,7 @@ export default function WanderMap({
           />
           <CreamWash />
           {!questPins.length ? (
-            <Recenter position={walkMode ? youAreHere : start.position} zoom={walkMode ? 16 : undefined} />
+            <Recenter position={walkMode ? youAreHere : start.position} zoom={walkMode ? 16 : undefined} animate={!walkMode} />
           ) : null}
           <FitRoute
             geometry={[
@@ -317,6 +333,7 @@ export default function WanderMap({
             enabled={showRoute && !fogActive && !walkMode && questPins.length === 0}
           />
           <FitPositions positions={questPositions} enabled={questPins.length > 0 && !walkMode} />
+          <FitHistorySites enabled={historyLayer} />
           <FogSync
             positions={exploredPositions}
             onClearings={setClearings}
@@ -447,6 +464,25 @@ export default function WanderMap({
               )}
             </>
           )}
+          {historyLayer && HISTORY_SITES.map((site) => (
+            <CircleMarker
+              key={site.id}
+              center={site.position}
+              radius={11}
+              pathOptions={{ color: "#fffdf8", fillColor: "#875b2b", fillOpacity: 1, weight: 3 }}
+            >
+              <Popup>
+                <div className="history-popup">
+                  <span className="history-popup-kicker">Local history</span>
+                  <strong>{site.name}</strong>
+                  <p>{site.facts[0]}</p>
+                  <a href={site.sourceUrl} target="_blank" rel="noreferrer">
+                    Source: {site.sourceLabel}
+                  </a>
+                </div>
+              </Popup>
+            </CircleMarker>
+          ))}
         </MapContainer>
         {!walkMode && (
           <div className="map-caption">

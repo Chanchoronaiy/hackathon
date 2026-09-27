@@ -1,6 +1,8 @@
 "use client";
 
-import { Building2, CalendarDays, Camera, Circle, Coffee, Landmark, Trees } from "lucide-react";
+import Image from "next/image";
+import { useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
+import { Building2, CalendarDays, Camera, Circle, Coffee, Landmark, Trees, Trash2 } from "lucide-react";
 
 type MomentTone = "sage" | "sand" | "blue" | "lavender" | "olive" | "clay";
 type MomentIcon = "tree" | "coffee" | "building" | "bridge" | "bench" | "circles" | "lamp";
@@ -20,6 +22,42 @@ type MonthGroup = {
   count: number;
   moments: Moment[];
 };
+
+type PhotoMemory = {
+  id: string;
+  createdAt: string;
+  monthId: string;
+  src: string;
+};
+
+const PHOTO_STORAGE_KEY = "wander-memories-photos";
+const PHOTO_CHANGE_EVENT = "wander-memories-photos-change";
+
+function subscribeToPhotos(onChange: () => void) {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(PHOTO_CHANGE_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(PHOTO_CHANGE_EVENT, onChange);
+  };
+}
+
+function getPhotoSnapshot() {
+  return localStorage.getItem(PHOTO_STORAGE_KEY) ?? "[]";
+}
+
+async function compressPhoto(file: File): Promise<string> {
+  const image = await createImageBitmap(file);
+  const scale = Math.min(1, 1200 / Math.max(image.width, image.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(image.width * scale);
+  canvas.height = Math.round(image.height * scale);
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Could not prepare this photo.");
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
+  image.close();
+  return canvas.toDataURL("image/jpeg", 0.78);
+}
 
 const MONTHS: MonthGroup[] = [
   {
@@ -86,11 +124,63 @@ function MomentGlyph({ icon }: { icon: MomentIcon }) {
   }
 }
 
-type MemoriesScreenProps = {
-  onAddMemory?: () => void;
-};
+export default function MemoriesScreen() {
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const photoData = useSyncExternalStore(subscribeToPhotos, getPhotoSnapshot, () => "[]");
+  const photos = useMemo(
+    () => (JSON.parse(photoData) as PhotoMemory[]).map((photo) => ({ ...photo, monthId: photo.monthId ?? MONTHS[0].id })),
+    [photoData],
+  );
+  const [targetMonthId, setTargetMonthId] = useState(MONTHS[0].id);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
-export default function MemoriesScreen({ onAddMemory }: MemoriesScreenProps) {
+  async function handlePhotoSelection(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.currentTarget.files ?? []);
+    event.currentTarget.value = "";
+    if (files.length === 0) return;
+
+    try {
+      const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+      const targetMonth = MONTHS.find((month) => month.id === targetMonthId) ?? MONTHS[0];
+      const usedSlots = photos.filter((photo) => photo.monthId === targetMonth.id).length;
+      const availableSlots = targetMonth.moments.length - usedSlots;
+      if (imageFiles.length === 0) {
+        setPhotoError("Choose an image file to add a memory.");
+        return;
+      }
+      if (availableSlots <= 0) {
+        setPhotoError(`${targetMonth.title} has no empty photo slots. Choose another month.`);
+        return;
+      }
+      const filesToAdd = imageFiles.slice(0, availableSlots);
+      const addedPhotos = await Promise.all(filesToAdd.map(async (file) => ({
+        id: crypto.randomUUID(),
+        createdAt: new Date().toISOString(),
+        monthId: targetMonthId,
+        src: await compressPhoto(file),
+      })));
+      const nextPhotos = [...photos, ...addedPhotos];
+      localStorage.setItem(PHOTO_STORAGE_KEY, JSON.stringify(nextPhotos));
+      window.dispatchEvent(new Event(PHOTO_CHANGE_EVENT));
+      setPhotoError(filesToAdd.length < imageFiles.length
+        ? `Added ${filesToAdd.length} photo${filesToAdd.length === 1 ? "" : "s"}. ${targetMonth.title} has no more empty slots.`
+        : null);
+    } catch {
+      setPhotoError("Could not save the photo. Try a smaller image or remove browser storage data.");
+    }
+  }
+
+  function handleDeletePhoto(photoId: string) {
+    try {
+      const nextPhotos = photos.filter((photo) => photo.id !== photoId);
+      localStorage.setItem(PHOTO_STORAGE_KEY, JSON.stringify(nextPhotos));
+      window.dispatchEvent(new Event(PHOTO_CHANGE_EVENT));
+      setPhotoError(null);
+    } catch {
+      setPhotoError("Could not delete the photo. Please try again.");
+    }
+  }
+
   return (
     <section className="memories-screen" aria-labelledby="memories-screen-title">
       <header className="memories-screen-header">
@@ -105,35 +195,73 @@ export default function MemoriesScreen({ onAddMemory }: MemoriesScreenProps) {
 
       <p className="memories-stats">19 memories · 11 walks · 27 km</p>
 
-      <button type="button" className="memories-add" onClick={onAddMemory}>
-        <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
-        <span>Add a memory</span>
-      </button>
+      <input
+        ref={photoInputRef}
+        className="memories-photo-input"
+        type="file"
+        accept="image/*"
+        multiple
+        onChange={handlePhotoSelection}
+        aria-label="Choose photos to add to Memories"
+      />
+      <div className="memories-add-row">
+        <label className="memories-month-target">
+          <span>Add to</span>
+          <select aria-label="Choose a month for this memory" value={targetMonthId} onChange={(event) => setTargetMonthId(event.target.value)}>
+            {MONTHS.map((month) => <option key={month.id} value={month.id}>{month.title}</option>)}
+          </select>
+        </label>
+        <button type="button" className="memories-add" onClick={() => photoInputRef.current?.click()}>
+          <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
+          <span>Add a memory</span>
+        </button>
+      </div>
+      {photoError ? <output className="memories-photo-error">{photoError}</output> : null}
 
-      {MONTHS.map((month) => (
-        <section key={month.id} className="memories-month" aria-labelledby={`${month.id}-title`}>
-          <div className="memories-section-head">
-            <h2 id={`${month.id}-title`}>{month.title}</h2>
-            <span>{month.count} moments</span>
-          </div>
-          <div className="memories-grid">
-            {month.moments.map((moment) => (
-              <button
-                key={moment.id}
-                type="button"
-                className={`memories-tile is-${moment.tone}`}
-                aria-label={`${moment.label}, ${moment.day} ${month.title}`}
-              >
-                {moment.mark ? <span className="memories-tile-mark">{moment.mark}</span> : null}
-                <span className="memories-tile-glyph" aria-hidden="true">
-                  <MomentGlyph icon={moment.icon} />
-                </span>
-                <span className="memories-tile-day">{moment.day}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
+      {MONTHS.map((month) => {
+        const monthPhotos = photos.filter((photo) => photo.monthId === month.id);
+        return (
+          <section key={month.id} className="memories-month" aria-labelledby={`${month.id}-title`}>
+            <div className="memories-section-head">
+              <h2 id={`${month.id}-title`}>{month.title}</h2>
+              <span>{month.count} moments</span>
+            </div>
+            <div className="memories-grid">
+              {month.moments.map((moment, index) => {
+                const photo = monthPhotos[index];
+                return photo ? (
+                  <div key={moment.id} className="memories-tile memories-photo-tile">
+                    <Image className="memories-photo-image" src={photo.src} alt={`${moment.label}, ${month.title}`} fill sizes="25vw" unoptimized />
+                    <span className="memories-tile-day">{moment.day}</span>
+                    <button
+                      type="button"
+                      className="memories-photo-delete"
+                      aria-label={`Delete photo from ${month.title}`}
+                      title="Delete photo"
+                      onClick={() => handleDeletePhoto(photo.id)}
+                    >
+                      <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    key={moment.id}
+                    type="button"
+                    className={`memories-tile is-${moment.tone}`}
+                    aria-label={`${moment.label}, ${moment.day} ${month.title}`}
+                  >
+                    {moment.mark ? <span className="memories-tile-mark">{moment.mark}</span> : null}
+                    <span className="memories-tile-glyph" aria-hidden="true">
+                      <MomentGlyph icon={moment.icon} />
+                    </span>
+                    <span className="memories-tile-day">{moment.day}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
     </section>
   );
 }
