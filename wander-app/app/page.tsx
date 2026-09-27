@@ -204,8 +204,6 @@ export default function Home() {
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [streetViewPosition, setStreetViewPosition] = useState<LatLng | null>(null);
   const [popularPlaces, setPopularPlaces] = useState<PopularPlace[]>([]);
-  const [popularityVisible, setPopularityVisible] = useState(false);
-  const [popularityLoading, setPopularityLoading] = useState(false);
   const [homeTab, setHomeTab] = useState<"map" | "explore" | "memories" | "saved" | "friends">("map");
   const [remixTries, setRemixTries] = useState(() => readRemixTries());
   const [remixPaywallOpen, setRemixPaywallOpen] = useState(false);
@@ -465,6 +463,15 @@ export default function Home() {
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, [walkingActive, displayRoute.stops, walkStopIndex]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/popularity", { signal: controller.signal })
+      .then(async (response) => response.ok ? response.json() as Promise<{ places?: PopularPlace[] }> : { places: [] })
+      .then((data) => setPopularPlaces(data.places ?? []))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -773,7 +780,22 @@ export default function Home() {
     );
   }, [applyPlan, applyStart, preferUnexplored, start, startName]);
 
+  const heatMapHidden = questsOpen
+    || plannerOpen
+    || searchFromOpen
+    || destinationQuery.trim().length > 0
+    || hasRoute
+    || walkingActive;
+
   const todaysQuests = useMemo(() => dailyQuests(), []);
+  const [hasUnfinishedQuests, setHasUnfinishedQuests] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const profile = readGamificationProfile();
+      setHasUnfinishedQuests(todaysQuests.some((quest) => !isQuestCompleted(quest.id, profile)));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [todaysQuests, questsOpen, _questPointsTick]);
   const questPins = !questsOpen ? [] : (() => {
     const profile = readGamificationProfile();
     return todaysQuests.map((quest, index) => ({
@@ -905,18 +927,6 @@ export default function Home() {
     setPlannerOpen(false);
   }
 
-  function togglePopularity() {
-    const nextVisible = !popularityVisible;
-    setPopularityVisible(nextVisible);
-    if (!nextVisible || popularPlaces.length || popularityLoading) return;
-    setPopularityLoading(true);
-    void fetch("/api/popularity")
-      .then(async (response) => response.ok ? response.json() as Promise<{ places?: PopularPlace[] }> : { places: [] })
-      .then((data) => setPopularPlaces(data.places ?? []))
-      .catch(() => setPopularPlaces([]))
-      .finally(() => setPopularityLoading(false));
-  }
-
   function openPlanner() {
     setPlannerOpen(true);
     setWalkingActive(false);
@@ -1035,7 +1045,7 @@ export default function Home() {
         onSelectOptionalStop={() => setOptionalRouteActive((current) => !current)}
         onExplorationPercent={setExplorationPercent}
         onStreetViewPosition={setStreetViewPosition}
-        popularPlaces={popularityVisible ? popularPlaces : []}
+        popularPlaces={heatMapHidden ? [] : popularPlaces}
       />
       {streetViewPosition && (
         <StreetViewDialog
@@ -1113,24 +1123,17 @@ export default function Home() {
               <Cloud size={18} strokeWidth={2.2} />
               <span>{fogActive ? "On" : "Off"}</span>
             </button>
-            <button
-              type="button"
-              className={`home-rail-chip${popularityVisible ? " is-on" : ""}`}
-              aria-pressed={popularityVisible}
-              aria-label="Toggle popular places heat map"
-              onClick={togglePopularity}
-            >
-              <Map size={18} strokeWidth={2.2} />
-              <span>{popularityLoading ? "Loading" : "Popular"}</span>
-            </button>
             <div className={`home-rail-quests${questsOpen ? " is-open" : ""}`}>
               <button
                 type="button"
                 className={`home-rail-chip${questsOpen ? " is-on" : ""}`}
                 aria-pressed={questsOpen}
-                aria-label={questsOpen ? "Close daily quests" : "Open daily quests"}
+                aria-label={questsOpen
+                  ? "Close daily quests"
+                  : hasUnfinishedQuests ? "Open daily quests, some unfinished" : "Open daily quests"}
                 onClick={openQuestsScreen}
               >
+                {hasUnfinishedQuests && <span className="quests-alert" aria-hidden="true">!</span>}
                 <MapPinned size={18} strokeWidth={2.2} />
                 <span>Quests</span>
               </button>

@@ -68,6 +68,38 @@ button,input { font:inherit; } button { cursor:pointer; }
 .leaflet-map { width:100%; height:100%; background:#ece7dc; }
 .leaflet-control-attribution { font-size:10px!important; opacity:.72; }
 .leaflet-tile-pane { filter:saturate(.72) contrast(.96) brightness(1.03); }
+.leaflet-wander-heat-pane .heat-blob {
+  background:transparent; border:0; pointer-events:none;
+  mix-blend-mode:multiply;
+}
+.heat-blob-halo,
+.heat-blob-core {
+  position:absolute; inset:0; border-radius:50%;
+}
+.heat-blob-core {
+  animation:heat-blob-breathe 3.2s ease-in-out infinite;
+}
+.heat-blob-halo {
+  opacity:0;
+  animation:heat-blob-spread 3.2s ease-out infinite;
+}
+.heat-blob.heat-delay-1 span { animation-delay:-.55s; }
+.heat-blob.heat-delay-2 span { animation-delay:-1.1s; }
+.heat-blob.heat-delay-3 span { animation-delay:-1.6s; }
+.heat-blob.heat-delay-4 span { animation-delay:-2.15s; }
+.heat-blob.heat-delay-5 span { animation-delay:-2.7s; }
+@keyframes heat-blob-breathe {
+  0%,100% { transform:scale(.9); opacity:.85; }
+  50% { transform:scale(1.04); opacity:1; }
+}
+@keyframes heat-blob-spread {
+  0% { transform:scale(.55); opacity:.7; }
+  100% { transform:scale(1.6); opacity:0; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .heat-blob-core,
+  .heat-blob-halo { animation:none; }
+}
 .map-loading {
   position:absolute; inset:0; display:grid; place-items:center; gap:12px; color:rgba(247,243,234,.92);
   background:radial-gradient(ellipse at 40% 35%, #2a3328, #161915 70%);
@@ -534,7 +566,26 @@ button,input { font:inherit; } button { cursor:pointer; }
   display:grid;
   justify-items:end;
 }
-.home-rail-quests > .home-rail-chip { pointer-events:auto; }
+.home-rail-quests > .home-rail-chip { pointer-events:auto; position:relative; overflow:visible; }
+.quests-alert {
+  position:absolute; top:-9px; left:-7px; z-index:2;
+  display:grid; place-items:center; width:20px; height:20px;
+  border-radius:50%; background:var(--rose, #d97c7c); color:#fffdf8;
+  font-size:13px; font-weight:900; line-height:1;
+  box-shadow:0 4px 10px rgba(0,0,0,.2);
+  transform:rotate(-14deg);
+  animation:quests-alert-jump 1.4s ease-in-out infinite;
+  pointer-events:none;
+}
+@keyframes quests-alert-jump {
+  0%,55%,100% { transform:translateY(0) rotate(-14deg); }
+  20% { transform:translateY(-6px) rotate(-18deg); }
+  35% { transform:translateY(0) rotate(-10deg); }
+  45% { transform:translateY(-2px) rotate(-14deg); }
+}
+@media (prefers-reduced-motion:reduce) {
+  .quests-alert { animation:none; }
+}
 .quests-slide-summary {
   position:absolute;
   top:50%;
@@ -581,6 +632,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 .home-rail-chip.is-on {
   border-color:rgba(110,168,210,.7); background:rgba(255,253,248,.98); color:var(--ink);
 }
+
 
 .home-explore-pill {
   position:absolute; z-index:510; left:18px;

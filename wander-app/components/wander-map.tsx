@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import L from "leaflet";
-import { CircleMarker, MapContainer, Marker, Polyline, Popup, Rectangle, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import { CircleMarker, MapContainer, Marker, Pane, Polyline, Popup, Rectangle, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { POI_DATA_TIMESTAMP } from "@/lib/adelaide-data";
 import {
   EXPLORATION_RADIUS_M,
@@ -14,6 +14,35 @@ import type { LatLng, WanderRoute } from "@/lib/route-planner";
 import { popularityScore, type PopularPlace } from "@/lib/popularity";
 
 type Clearing = { id: string; x: number; y: number; r: number };
+
+// Coolest (deep shade) → hottest (full sun).
+const HEAT_COLOURS = ["#b8b3d9", "#dcd9ee", "#fffceb", "#ffe08a", "#f6b48f", "#d97c7c"];
+const HEAT_NEUTRAL = 2;
+
+function heatGradient(score: number) {
+  const level = Math.min(HEAT_COLOURS.length - 1, Math.max(0, Math.round(score * (HEAT_COLOURS.length - 1))));
+  const step = level >= HEAT_NEUTRAL ? -1 : 1;
+  const ramp: string[] = [];
+  for (let index = level; index !== HEAT_NEUTRAL + step; index += step) ramp.push(HEAT_COLOURS[index]);
+  if (ramp.length === 1) ramp.push(HEAT_COLOURS[HEAT_NEUTRAL]);
+  const alphas = ["f2", "c4", "8c", "5c"];
+  const stops = ramp.map((colour, index) => {
+    const at = Math.round((index / ramp.length) * 58);
+    return `${colour}${alphas[Math.min(index, alphas.length - 1)]} ${at}%`;
+  });
+  return `radial-gradient(circle, ${stops.join(", ")}, ${ramp[ramp.length - 1]}00 70%)`;
+}
+
+function heatBlobIcon(score: number, index: number) {
+  const size = Math.round(2 * (24 + score * 50));
+  const gradient = heatGradient(score);
+  return L.divIcon({
+    className: `heat-blob heat-delay-${index % 6}`,
+    html: `<span class="heat-blob-halo" style="background:${gradient}"></span><span class="heat-blob-core" style="background:${gradient}"></span>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
 
 function walkStopIcon(number: number, faded: boolean) {
   return L.divIcon({
@@ -295,18 +324,17 @@ export default function WanderMap({
             onClearings={setClearings}
             onPercent={onExplorationPercent}
           />
-          {popularPlaces.map((place) => {
-            const score = popularityScore(place);
-            return (
-              <CircleMarker
+          <Pane name="wander-heat" style={{ zIndex: 350, pointerEvents: "none" }}>
+            {popularPlaces.map((place, index) => (
+              <Marker
                 key={place.id}
-                center={place.position}
-                radius={14 + score * 30}
-                pathOptions={{ color: "#e9592f", fillColor: "#ffcf56", fillOpacity: 0.16 + score * 0.34, weight: 1.5, opacity: 0.7 }}
+                position={place.position}
+                icon={heatBlobIcon(popularityScore(place), index)}
                 interactive={false}
+                keyboard={false}
               />
-            );
-          })}
+            ))}
+          </Pane>
           {showRoute && !walkMode && (
             <Marker
               position={streetViewBuddyPosition ?? start.position}
