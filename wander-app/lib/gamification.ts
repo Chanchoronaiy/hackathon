@@ -24,6 +24,8 @@ export type LeaderboardEntry = {
 
 const EMPTY_PROFILE: GamificationProfile = { points: 0, completedEventIds: [] };
 export const WALK_POINTS_PER_MINUTE = 10;
+/** Bonus for the walk's memory. Walks allow one memory, so this is added at most once. */
+export const WALK_CAPTURE_BONUS = 1;
 
 const QUEST_BONUSES = [220, 250, 280, 300, 340];
 
@@ -129,15 +131,19 @@ export function completeDailyQuest(quest: DailyQuest): GamificationProfile {
   return awardPoints(quest.id, quest.points);
 }
 
-export function walkPointsForMinutes(minutes: number) {
+export function walkPointsForMinutes(minutes: number, captured = false) {
   const completedMinutes = Math.max(1, Math.min(180, Math.round(minutes)));
-  return completedMinutes * WALK_POINTS_PER_MINUTE;
+  return completedMinutes * WALK_POINTS_PER_MINUTE + (captured ? WALK_CAPTURE_BONUS : 0);
 }
 
-/** Awards a completed walk once locally, then reconciles the total with Supabase. */
-export function completeWalk(eventId: string, minutes: number): GamificationProfile {
+/**
+ * Awards a completed walk once locally, then reconciles the total with Supabase.
+ * `eventId` is `walk:<walkId>`; the server adds the capture bonus only if that
+ * walk has a row in walk_memories, so the client can't claim it.
+ */
+export function completeWalk(eventId: string, minutes: number, captured: boolean): GamificationProfile {
   const completedMinutes = Math.max(1, Math.min(180, Math.round(minutes)));
-  const next = awardPoints(eventId, walkPointsForMinutes(completedMinutes), false);
+  const next = awardPoints(eventId, walkPointsForMinutes(completedMinutes, captured), false);
 
   if (typeof window !== "undefined") {
     void import("@/lib/cloud-data")

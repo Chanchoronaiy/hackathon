@@ -145,6 +145,49 @@ export async function submitCloudCheckin({
   return error || typeof data !== 'number' ? null : data;
 }
 
+/**
+ * Stores a walk's one memory in Supabase. The `walk_memories` table has a
+ * unique (user_id, walk_id) constraint, so the database rejects a second
+ * memory for the same walk (Postgres error 23505) — reported as 'duplicate'.
+ */
+export async function syncWalkMemory({
+  walkId,
+  routeTitle,
+  stopId,
+  stopName,
+  photo,
+}: {
+  walkId: string;
+  routeTitle: string;
+  stopId?: string;
+  stopName?: string;
+  photo: Blob;
+}): Promise<'saved' | 'duplicate' | 'skipped' | 'error'> {
+  const supabase = getSupabase();
+  const user = await ensureSupabaseUser();
+  if (!supabase || !user) return 'skipped';
+  const extension = photo.type === 'image/png' ? 'png' : photo.type === 'image/webp' ? 'webp' : 'jpg';
+  // One fixed path per walk: storage also refuses a second upload (upsert: false).
+  const photoPath = `${user.id}/memories/${walkId}.${extension}`;
+  const { error: uploadError } = await supabase.storage
+    .from('checkin-photos')
+    .upload(photoPath, photo, {
+      contentType: photo.type || 'image/jpeg',
+      upsert: false,
+    });
+  if (uploadError && !/exists|duplicate/i.test(uploadError.message)) return 'error';
+  const { error } = await supabase.from('walk_memories').insert({
+    user_id: user.id,
+    walk_id: walkId,
+    route_title: routeTitle,
+    stop_id: stopId ?? null,
+    stop_name: stopName ?? null,
+    photo_path: photoPath,
+  });
+  if (!error) return 'saved';
+  return error.code === '23505' ? 'duplicate' : 'error';
+}
+
 export async function loadCloudLeaderboard(): Promise<
   LeaderboardEntry[] | null
 > {

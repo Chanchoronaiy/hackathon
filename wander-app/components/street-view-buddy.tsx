@@ -51,6 +51,7 @@ export default function StreetViewBuddy({
       }}
       onPointerCancel={reset}
     >
+      <span className="buddy-bubble" aria-hidden="true">Drag me</span>
       <img className="buddy-idle" src="/mascot/street-view-buddy-idle.png" alt="" draggable={false} />
       <img className="buddy-held" src="/mascot/street-view-buddy-held.png" alt="" draggable={false} />
     </span>

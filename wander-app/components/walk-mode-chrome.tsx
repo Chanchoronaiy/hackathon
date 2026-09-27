@@ -1,17 +1,37 @@
 "use client";
 
-import { ArrowLeft, Camera, Check, CornerUpRight } from "lucide-react";
-import { useRef } from "react";
-import { completeWalk } from "@/lib/gamification";
+import { ArrowLeft, Bookmark, Camera, Check, CornerUpRight, Images, Shuffle, Star, X } from "lucide-react";
+import Image from "next/image";
+import { useState } from "react";
+import type { HistoryImagePair } from "@/lib/history-sites";
 import type { WanderRoute } from "@/lib/route-planner";
 
 type WalkModeChromeProps = {
   route: WanderRoute;
+  reviewTrailId: string;
   currentStopIndex: number;
+  locationStatus: "locating" | "located" | "unavailable";
+  historyMoment: {
+    siteName: string;
+    fact: string;
+    facts?: string[];
+    factIndex?: number;
+    beforeAfter?: HistoryImagePair;
+    sourceLabel?: string;
+    sourceUrl?: string;
+  } | null;
   onBack: () => void;
   onFinish: () => void;
   onCapture: () => void;
+  onDismissHistoryMoment: () => void;
+  onAnotherFact: () => void;
+  onSubmitReview: (trailId: string, rating: number, comment: string) => void;
   onAdvance?: () => void;
+  /** This walk's one memory is already saved. */
+  memorySaved?: boolean;
+  /** This route is already in the saved list. */
+  routeSaved?: boolean;
+  onSaveRoute?: () => void;
 };
 
 function remainingMinutes(route: WanderRoute, currentStopIndex: number) {
@@ -37,12 +57,27 @@ function walkPercent(route: WanderRoute, currentStopIndex: number) {
 
 export default function WalkModeChrome({
   route,
+  reviewTrailId,
   currentStopIndex,
+  locationStatus,
+  historyMoment,
   onBack,
   onFinish,
   onCapture,
+  onDismissHistoryMoment,
+  onAnotherFact,
+  onSubmitReview,
   onAdvance,
+  memorySaved = false,
+  routeSaved = false,
+  onSaveRoute,
 }: WalkModeChromeProps) {
+  const [photoComparisonOpen, setPhotoComparisonOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewSubmitted, setReviewSubmitted] = useState(false);
+  const [reviewSkipped, setReviewSkipped] = useState(false);
   const totalStops = route.stops.length;
   const done = totalStops === 0 || currentStopIndex >= totalStops;
   const nextStop = done ? null : route.stops[currentStopIndex];
@@ -50,13 +85,6 @@ export default function WalkModeChrome({
   const minsLeft = remainingMinutes(route, currentStopIndex);
   const kmLeft = remainingKm(route, currentStopIndex);
   const progress = walkPercent(route, currentStopIndex);
-  const completionEventRef = useRef<string | null>(null);
-
-  function finishAndAwardPoints() {
-    completionEventRef.current ??= `walk:${crypto.randomUUID()}`;
-    completeWalk(completionEventRef.current, route.walkingMinutes);
-    onFinish();
-  }
 
   return (
     <>
@@ -77,10 +105,87 @@ export default function WalkModeChrome({
         </div>
         <strong className="walk-progress-pct">{progress}%</strong>
       </div>
+      <p className={`walk-location-status is-${locationStatus}`} aria-live="polite">
+        <span aria-hidden="true" />
+        {locationStatus === "located"
+          ? "Live location on"
+          : locationStatus === "locating"
+            ? "Finding your location…"
+            : "Live location unavailable. Check browser location permission; progress is estimated."}
+      </p>
 
-      <button type="button" className="walk-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
-        <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
-      </button>
+      {historyMoment ? (
+        <aside className="walk-history-toast" aria-live="polite" aria-label={`${historyMoment.sourceUrl ? "Local history" : "Wander note"} at ${historyMoment.siteName}`}>
+          <div className="walk-history-toast-head">
+            <span>{historyMoment.sourceUrl ? "A little local history" : "A note for your wander"} · {historyMoment.siteName}</span>
+            <button type="button" aria-label="Dismiss history fact" onClick={onDismissHistoryMoment}>
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+          <p>{historyMoment.fact}</p>
+          {historyMoment.beforeAfter ? (
+            <button type="button" className="walk-history-compare-trigger" onClick={() => setPhotoComparisonOpen(true)}>
+              <Images size={16} aria-hidden="true" /> View before &amp; after photos
+            </button>
+          ) : null}
+          {historyMoment.sourceUrl && historyMoment.sourceLabel ? (
+            <a href={historyMoment.sourceUrl} target="_blank" rel="noreferrer">Source: {historyMoment.sourceLabel}</a>
+          ) : (
+            <span className="walk-history-source">From the curated Adelaide place guide</span>
+          )}
+          {historyMoment.facts && historyMoment.facts.length > 1 ? (
+            <button type="button" className="walk-history-another" onClick={onAnotherFact}>
+              <Shuffle size={14} aria-hidden="true" /> Another fact
+            </button>
+          ) : null}
+        </aside>
+      ) : null}
+
+      {photoComparisonOpen && historyMoment?.beforeAfter ? (
+        <div className="walk-photo-comparison-backdrop">
+          <button
+            type="button"
+            className="walk-photo-comparison-scrim"
+            aria-label="Close photo comparison"
+            onClick={() => setPhotoComparisonOpen(false)}
+          />
+          <dialog open className="walk-photo-comparison" aria-labelledby="walk-photo-comparison-title">
+            <header>
+              <div>
+                <span>Before &amp; after</span>
+                <h2 id="walk-photo-comparison-title">{historyMoment.siteName}</h2>
+              </div>
+              <button type="button" aria-label="Close photo comparison" onClick={() => setPhotoComparisonOpen(false)}>
+                <X size={20} aria-hidden="true" />
+              </button>
+            </header>
+            <div className="walk-history-comparison">
+              {[historyMoment.beforeAfter.before, historyMoment.beforeAfter.after].map((photo, index) => (
+                <figure key={photo.url} className="walk-history-photo">
+                  <div className="walk-history-photo-image">
+                    <Image src={photo.url} alt={photo.label} fill sizes="(max-width: 600px) 90vw, 45vw" unoptimized />
+                    <span>{index === 0 ? "BEFORE" : "AFTER"}</span>
+                  </div>
+                  <figcaption>
+                    <strong>{photo.label}</strong>
+                    <a href={photo.sourceUrl} target="_blank" rel="noreferrer">{photo.credit}</a>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </dialog>
+        </div>
+      ) : null}
+
+      {memorySaved ? (
+        <button type="button" className="walk-capture is-saved" aria-label="Memory saved ✓" disabled>
+          <Check size={20} strokeWidth={2.6} aria-hidden="true" />
+        </button>
+      ) : (
+        <button type="button" className="walk-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
+          <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
+        </button>
+      )}
 
       {nextStop ? (
         <aside className="walk-next-card">
@@ -94,10 +199,11 @@ export default function WalkModeChrome({
             <button
               type="button"
               className="walk-next-turn"
-              aria-label={`Reached checkpoint ${nextNumber}`}
+              aria-label={`Next stop: ${nextStop.name}`}
               onClick={onAdvance}
             >
               <CornerUpRight size={22} strokeWidth={2.4} />
+              <span>Next</span>
             </button>
           </div>
         </aside>
@@ -107,19 +213,92 @@ export default function WalkModeChrome({
           <div className="walk-next-row is-done">
             <div className="walk-next-copy">
               <strong>You’re back near the start</strong>
-              <p>Capture a last moment, or end the walk.</p>
+              <p>{memorySaved ? "Your memory is saved. End the walk when you\u2019re ready." : "Capture a last moment, or end the walk."}</p>
             </div>
           </div>
-          <div className="walk-done-actions">
-            <button type="button" className="walk-done-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
-              <Camera size={18} strokeWidth={2.2} aria-hidden="true" />
-              Capture
-            </button>
-            <button type="button" className="walk-done-end" onClick={finishAndAwardPoints}>
-              <Check size={18} strokeWidth={2.4} aria-hidden="true" />
-              End walk
-            </button>
-          </div>
+          {reviewSubmitted ? (
+            <output className="walk-review-thanks">
+              <strong>Thanks for helping other walkers.</strong>
+              <button type="button" className="walk-done-end" onClick={onFinish}>
+                <Check size={18} strokeWidth={2.4} aria-hidden="true" /> End walk
+              </button>
+            </output>
+          ) : reviewSkipped ? (
+            <div className="walk-done-actions">
+              {memorySaved ? (
+                <button type="button" className="walk-done-capture is-saved" disabled>
+                  Memory saved ✓
+                </button>
+              ) : (
+                <button type="button" className="walk-done-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
+                  <Camera size={18} strokeWidth={2.2} aria-hidden="true" /> Capture
+                </button>
+              )}
+              <button type="button" className="walk-done-end" onClick={onFinish}>
+                <Check size={18} strokeWidth={2.4} aria-hidden="true" /> End walk
+              </button>
+            </div>
+          ) : (
+            <form
+              className="walk-review-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (reviewRating < 1) {
+                  setReviewError("Choose a star rating first.");
+                  return;
+                }
+                if (reviewComment.trim().length < 3) {
+                  setReviewError("Add a short comment about your walk.");
+                  return;
+                }
+                onSubmitReview(reviewTrailId, reviewRating, reviewComment.trim());
+                setReviewSubmitted(true);
+                setReviewError(null);
+              }}
+            >
+              <strong>How was this walk?</strong>
+              <div className="walk-review-row">
+              <fieldset className="walk-review-stars">
+                <legend>Rate this walk</legend>
+                {[1, 2, 3, 4, 5].map((rating) => (
+                  <button
+                    key={rating}
+                    type="button"
+                    aria-label={`${rating} star${rating === 1 ? "" : "s"}`}
+                    aria-pressed={reviewRating === rating}
+                    onClick={() => { setReviewRating(rating); setReviewError(null); }}
+                  >
+                    <Star size={22} fill={reviewRating >= rating ? "currentColor" : "none"} />
+                  </button>
+                ))}
+              </fieldset>
+              <button
+                type="button"
+                className={`walk-review-save${routeSaved ? " is-saved" : ""}`}
+                aria-label={routeSaved ? "Walk saved to your list, tap to unsave" : "Save this walk"}
+                aria-pressed={routeSaved}
+                onClick={onSaveRoute}
+              >
+                <Bookmark size={20} strokeWidth={2.2} fill={routeSaved ? "currentColor" : "none"} />
+              </button>
+              </div>
+              <label className="walk-review-comment">
+                <span>Leave a tip or comment</span>
+                <textarea
+                  value={reviewComment}
+                  maxLength={300}
+                  rows={2}
+                  placeholder="What would you tell the next walker?"
+                  onChange={(event) => { setReviewComment(event.target.value); setReviewError(null); }}
+                />
+              </label>
+              {reviewError ? <p className="walk-review-error" role="alert">{reviewError}</p> : null}
+              <div className="walk-done-actions">
+                <button type="submit" className="walk-done-end">Post review</button>
+                <button type="button" className="walk-review-skip" onClick={() => setReviewSkipped(true)}>Skip review</button>
+              </div>
+            </form>
+          )}
         </aside>
       )}
     </>

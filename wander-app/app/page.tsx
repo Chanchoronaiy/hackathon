@@ -1,14 +1,16 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { Angry, ArrowLeft, Bookmark, CalendarDays, Camera, Cloud, Coffee, Compass, Leaf, Map, MapPinned, Palette, Shuffle, Sun, Trees, Trophy, Users, X } from "lucide-react";
+import { Angry, ArrowLeft, BookOpen, Bookmark, CalendarDays, Camera, Cloud, Coffee, Compass, Leaf, Map, MapPinned, Palette, Shuffle, Sun, Trees, Trophy, Users, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DailyQuestsScreen from "@/components/daily-quests-screen";
 import ExploreScreen, { type ExploreSuggestion } from "@/components/explore-screen";
 import FriendsScreen from "@/components/friends-screen";
 import LeaderboardScreen from "@/components/leaderboard-screen";
 import MemoriesScreen from "@/components/memories-screen";
+import ProfileScreen from "@/components/profile-screen";
 import SavedScreen from "@/components/saved-screen";
+import WalkMemoryDialog from "@/components/walk-memory-dialog";
 import WalkModeChrome from "@/components/walk-mode-chrome";
 import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
@@ -17,7 +19,7 @@ import StreetViewDialog from "@/components/street-view-dialog";
 import type { Map as LeafletMap } from "leaflet";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
-import { dailyQuests, isQuestCompleted, localDateKey, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
+import { completeWalk, dailyQuests, isQuestCompleted, localDateKey, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
 import {
   canRemix,
   consumeRemixTry,
@@ -28,10 +30,14 @@ import {
   REMIX_PACK_PRICE,
   REMIX_PACK_TRIES,
 } from "@/lib/remix-tries";
+import { HISTORY_SITES, type HistoryImagePair } from "@/lib/history-sites";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
-import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
-import { loadCloudTrials, removeCloudTrial, syncSavedTrial } from "@/lib/cloud-data";
+import { deleteSavedTrial, pinnedRouteFor, readSavedTrials, routeKeyFor, saveTrial, writeSavedTrials, type SavedTrial } from "@/lib/saved-trials";
+import { addTrailReview } from "@/lib/trail-reviews";
+import { recordWalkHistory, type WalkCapture } from "@/lib/walk-history";
+import { loadCloudTrials, removeCloudTrial, syncSavedTrial, syncWalkMemory } from "@/lib/cloud-data";
+import { ALREADY_SAVED_MESSAGE, createId, getMemoryForWalk, hasSeenMemoryRule, markMemoryRuleSeen, saveWalkMemory } from "@/lib/walk-memories";
 import { playClick, playPartyHorn, playWalkStart } from "@/lib/sound";
 import { fetchAdelaideWeather, type WeatherSnapshot } from "@/lib/weather";
 import type { PopularPlace } from "@/lib/popularity";
@@ -46,10 +52,21 @@ const WanderMap = dynamic(() => import("@/components/wander-map"), {
 });
 
 type Mode = "discover" | "heat";
+type WalkLocationStatus = "locating" | "located" | "unavailable";
+type WalkHistoryMoment = {
+  siteName: string;
+  fact: string;
+  facts?: string[];
+  factIndex?: number;
+  beforeAfter?: HistoryImagePair;
+  sourceLabel?: string;
+  sourceUrl?: string;
+};
 type Plan = {
   mode: Mode;
   minutes: number;
   interests: string[];
+  suggestionId?: string;
   start?: LatLng;
   startName?: string;
   preferUnexplored?: boolean;
@@ -57,6 +74,11 @@ type Plan = {
   focusDestination?: { name: string; position: LatLng };
   remixSeed?: number;
   excludePlaceIds?: string[];
+  /** Set when this plan was reopened from the saved list. */
+  savedTrialId?: string;
+  /** Reopened saved route: shown exactly as saved instead of being re-planned. */
+  pinnedRoute?: WanderRoute;
+  pinnedOptionalActive?: boolean;
 };
 type LocationStatus = "locating" | "located" | "idle";
 
@@ -94,6 +116,7 @@ function YourWanderSheet({
   onRemix,
   onStartWalk,
   onSave,
+  saved,
   onClose,
   onDropBuddy,
 }: {
@@ -102,6 +125,7 @@ function YourWanderSheet({
   onRemix: () => void;
   onStartWalk: () => void;
   onSave: () => void;
+  saved: boolean;
   onClose: () => void;
   onDropBuddy: (clientX: number, clientY: number) => void;
 }) {
@@ -148,8 +172,14 @@ function YourWanderSheet({
         <button type="button" className="wander-sheet-start" onClick={onStartWalk}>
           Start walk
         </button>
-        <button type="button" className="wander-sheet-save" aria-label="Save this wander" onClick={onSave}>
-          <Bookmark size={20} strokeWidth={2.2} />
+        <button
+          type="button"
+          className={`wander-sheet-save${saved ? " is-saved" : ""}`}
+          aria-label={saved ? "Saved to your list, tap to unsave" : "Save this wander"}
+          aria-pressed={saved}
+          onClick={onSave}
+        >
+          <Bookmark size={20} strokeWidth={2.2} fill={saved ? "currentColor" : "none"} />
         </button>
       </div>
     </aside>
@@ -157,9 +187,13 @@ function YourWanderSheet({
 }
 
 export default function Home() {
+  const walkStartedAtRef = useRef<string | null>(null);
+  const walkCapturesRef = useRef<WalkCapture[]>([]);
+  const seenWalkHistorySitesRef = useRef(new Set<string>());
+  const seenWalkStopsRef = useRef(new Set<string>());
   const [mode, setMode] = useState<Mode>("discover");
   const [wanderHours, setWanderHours] = useState(0);
-  const [wanderMinutes, setWanderMinutes] = useState(0);
+  const [wanderMinutes, setWanderMinutes] = useState(15);
   const [selected, setSelected] = useState(["art", "green"]);
   const [preferUnexplored, setPreferUnexplored] = useState(true);
   const [start, setStart] = useState<LatLng | undefined>(undefined);
@@ -170,6 +204,7 @@ export default function Home() {
   const [pendingDestination, setPendingDestination] = useState<{ label: string; position: LatLng } | null>(null);
   const [searchFromOpen, setSearchFromOpen] = useState(false);
   const [locationStatus, setLocationStatus] = useState<LocationStatus>("locating");
+  const [locationMessage, setLocationMessage] = useState<string | null>(null);
   const startTouchedRef = useRef(false);
   const [activePlan, setActivePlan] = useState<Plan | null>(null);
   const [weather, setWeather] = useState<WeatherSnapshot | null>(null);
@@ -187,6 +222,7 @@ export default function Home() {
   const [readyRouteKey, setReadyRouteKey] = useState<string | null>(null);
   const [fogActive, setFogActive] = useState(false);
   const [friendsFogView, setFriendsFogView] = useState(false);
+  const [historyLayer, setHistoryLayer] = useState(false);
   const [explorationPercent, setExplorationPercent] = useState(0);
   const [generating, setGenerating] = useState(false);
   const [plannerNotice, setPlannerNotice] = useState<string | null>(null);
@@ -196,8 +232,21 @@ export default function Home() {
   }, [celebratingFinish]);
   const [wanderSheetOpen, setWanderSheetOpen] = useState(false);
   const [walkingActive, setWalkingActive] = useState(false);
+  const [walkLocationStatus, setWalkLocationStatus] = useState<WalkLocationStatus>("locating");
+  const [walkHistoryMoment, setWalkHistoryMoment] = useState<WalkHistoryMoment | null>(null);
   const [walkStopIndex, setWalkStopIndex] = useState(0);
   const [walkPosition, setWalkPosition] = useState<LatLng | null>(null);
+  // Each walk gets a unique id; its one memory (photo) records that id. Restarting the
+  // same generated plan before finishing it resumes the same walk. (Not loopKey: that
+  // changes as stops are explored, even though it's the same route.)
+  const [walkId, setWalkId] = useState<string | null>(null);
+  const [walkPlan, setWalkPlan] = useState<Plan | null>(null);
+  const [walkMemorySaved, setWalkMemorySaved] = useState(false);
+  const [memoryStep, setMemoryStep] = useState<"intro" | "preview" | null>(null);
+  const [memoryPhoto, setMemoryPhoto] = useState<{ file: File; url: string } | null>(null);
+  const [memorySaving, setMemorySaving] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
+  const memoryInputRef = useRef<HTMLInputElement>(null);
   const [heatEscapeOpen, setHeatEscapeOpen] = useState(false);
   const [heatEscape, setHeatEscape] = useState<{ shade: number } | null>(null);
   const [savedOpen, setSavedOpen] = useState(false);
@@ -208,7 +257,10 @@ export default function Home() {
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null);
   const [_questPointsTick, setQuestPointsTick] = useState(0);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [savedTrials, setSavedTrials] = useState<SavedTrial[]>([]);
+  // The plan saved from the Your wander sheet or end-of-walk card, so its bookmark stays filled.
+  const [justSaved, setJustSaved] = useState<{ plan: Plan; trialId: string } | null>(null);
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [streetViewPosition, setStreetViewPosition] = useState<LatLng | null>(null);
@@ -254,7 +306,7 @@ export default function Home() {
   );
 
   const planned = useMemo(
-    () => planWanderRoute({
+    () => activePlan?.pinnedRoute ?? planWanderRoute({
       ...(activePlan ?? draftPlan),
       start: start ?? (activePlan ?? draftPlan).start,
       startName: startName ?? (activePlan ?? draftPlan).startName,
@@ -297,21 +349,28 @@ export default function Home() {
     };
   }, [optionalRouteActive, route]);
 
+  const pinnedOptionalActive = Boolean(activePlan?.pinnedRoute && activePlan.pinnedOptionalActive);
   useEffect(() => {
-    setOptionalRouteActive(false);
-  }, [loopKey]);
+    setOptionalRouteActive(pinnedOptionalActive);
+  }, [loopKey, pinnedOptionalActive]);
 
   const hasRoute = activePlan != null;
   const displayMode = activePlan?.mode ?? mode;
 
   const applyStart = useCallback((next: { label: string; position: LatLng }, options?: { fromUser?: boolean }) => {
     if (options?.fromUser) startTouchedRef.current = true;
+    setLocationMessage(null);
     setStart(next.position);
     setStartName(next.label);
     setStartQuery(next.label);
-    setActivePlan((current) => (
-      current ? { ...current, start: next.position, startName: next.label } : current
-    ));
+    setActivePlan((current) => {
+      if (!current) return current;
+      const moved = current.start?.[0] !== next.position[0] || current.start?.[1] !== next.position[1];
+      // A new start means a new loop, so a pinned saved route is re-planned from there.
+      return moved
+        ? { ...current, start: next.position, startName: next.label, pinnedRoute: undefined, savedTrialId: undefined }
+        : { ...current, startName: next.label };
+    });
   }, []);
 
   const clearToVictoriaSquare = useCallback((fromUser = false) => {
@@ -320,28 +379,37 @@ export default function Home() {
     setStartName(undefined);
     setStartQuery("");
     setActivePlan((current) => (
-      current ? { ...current, start: undefined, startName: undefined } : current
+      current
+        ? current.start
+          ? { ...current, start: undefined, startName: undefined, pinnedRoute: undefined, savedTrialId: undefined }
+          : { ...current, startName: undefined }
+        : current
     ));
   }, []);
 
   const useMyLocation = useCallback(() => {
     if (!navigator.geolocation) {
       setLocationStatus("idle");
+      setLocationMessage("Location is not available in this browser.");
       clearToVictoriaSquare(true);
       setFromQuery("Victoria Square");
       return;
     }
     setLocationStatus("locating");
+    setLocationMessage(null);
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const next: LatLng = [position.coords.latitude, position.coords.longitude];
         setLocationStatus("located");
+        setLocationMessage(null);
         applyStart({ label: "Your location", position: next }, { fromUser: true });
         setFromQuery("Your location");
       },
-      () => {
-        // Demo-friendly: keep Victoria Square quietly if the browser blocks us.
+      (error) => {
         setLocationStatus("idle");
+        setLocationMessage(error.code === error.PERMISSION_DENIED
+          ? "Allow location access in your browser, then try again."
+          : "Could not get your location. Check GPS and try again.");
         clearToVictoriaSquare(true);
         setFromQuery("Victoria Square");
       },
@@ -383,7 +451,7 @@ export default function Home() {
     }
     setGenerating(true);
     const plan = nextPlan ?? { mode, minutes: planMinutes, interests: selected, start, startName, preferUnexplored };
-    const preview = planWanderRoute({
+    const preview = plan.pinnedRoute ?? planWanderRoute({
       ...plan,
       exploredIds,
       preferUnexplored: plan.preferUnexplored ?? preferUnexplored,
@@ -429,8 +497,9 @@ export default function Home() {
     ]
       .map((stop) => stop.id)
       .filter((id) => id !== activePlan.focusPlaceId && !id.startsWith("search:"));
+    const { pinnedRoute: _pinned, pinnedOptionalActive: _optional, savedTrialId: _saved, ...remixFrom } = activePlan;
     applyPlan({
-      ...activePlan,
+      ...remixFrom,
       remixSeed: (activePlan.remixSeed ?? 0) + 1,
       excludePlaceIds,
     });
@@ -444,6 +513,19 @@ export default function Home() {
 
   const handleExploreStop = useCallback((id: string) => {
     setExploredIds(markExplored(id));
+  }, []);
+
+  const dismissWalkHistoryMoment = useCallback(() => {
+    setWalkHistoryMoment(null);
+  }, []);
+
+  const showAnotherWalkFact = useCallback(() => {
+    setWalkHistoryMoment((current) => {
+      if (!current?.facts || current.facts.length < 2) return current;
+      const options = current.facts.map((_, index) => index).filter((index) => index !== current.factIndex);
+      const factIndex = options[Math.floor(Math.random() * options.length)];
+      return { ...current, factIndex, fact: current.facts[factIndex] };
+    });
   }, []);
 
   useEffect(() => {
@@ -469,16 +551,47 @@ export default function Home() {
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         const next: LatLng = [position.coords.latitude, position.coords.longitude];
+        setWalkLocationStatus("located");
         setWalkPosition(next);
         setExploredTrail(recordExploredPosition(next));
 
+        const nearbyHistorySite = HISTORY_SITES.find((site) => (
+          !seenWalkHistorySitesRef.current.has(site.id)
+          && distanceMetres(next, site.position) <= 350
+        ));
+        if (nearbyHistorySite) {
+          seenWalkHistorySitesRef.current.add(nearbyHistorySite.id);
+          const fact = nearbyHistorySite.facts[Math.floor(Math.random() * nearbyHistorySite.facts.length)];
+          setWalkHistoryMoment({
+            siteName: nearbyHistorySite.name,
+            fact,
+            facts: nearbyHistorySite.facts,
+            factIndex: nearbyHistorySite.facts.indexOf(fact),
+            beforeAfter: nearbyHistorySite.beforeAfter,
+            sourceLabel: nearbyHistorySite.sourceLabel,
+            sourceUrl: nearbyHistorySite.sourceUrl,
+          });
+        }
+
         const nextStop = displayRoute.stops[walkStopIndex];
         if (nextStop && distanceMetres(next, nextStop.position) <= 45) {
+          if (!seenWalkStopsRef.current.has(nextStop.id)) {
+            seenWalkStopsRef.current.add(nextStop.id);
+            const stopHasHistory = HISTORY_SITES.some((site) => (
+              distanceMetres(site.position, nextStop.position) <= 150
+            ));
+            if (!nearbyHistorySite && !stopHasHistory) {
+              setWalkHistoryMoment({
+                siteName: nextStop.name,
+                fact: nextStop.reason,
+              });
+            }
+          }
           setExploredIds(markExplored(nextStop.id));
           setWalkStopIndex((current) => Math.min(displayRoute.stops.length, current + 1));
         }
       },
-      () => undefined,
+      () => setWalkLocationStatus("unavailable"),
       { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
@@ -598,6 +711,7 @@ export default function Home() {
     setQuestsOpen(false);
     setSelectedQuestId(null);
     setLeaderboardOpen(false);
+    setProfileOpen(false);
   }, []);
 
   /** Drop a planned route that was never started as a walk. */
@@ -607,16 +721,6 @@ export default function Home() {
     setOrsOverride(null);
     setHeatEscapeOpen(false);
   }, []);
-
-  const openSavedScreen = useCallback((note?: string | null) => {
-    setSaveNote(note ?? null);
-    closeOverlayScreens();
-    clearUnusedRoute();
-    setSavedOpen(true);
-    setHomeTab("saved");
-    setPlannerOpen(false);
-    setFogActive(false);
-  }, [clearUnusedRoute, closeOverlayScreens]);
 
   const openExploreScreen = useCallback(() => {
     closeOverlayScreens();
@@ -678,6 +782,15 @@ export default function Home() {
     setWalkingActive(false);
     setHomeTab("map");
   }, [clearUnusedRoute, closeOverlayScreens, questsOpen]);
+
+  const openProfileScreen = useCallback(() => {
+    closeOverlayScreens();
+    clearUnusedRoute();
+    setProfileOpen(true);
+    setPlannerOpen(false);
+    setFogActive(false);
+    setWalkingActive(false);
+  }, [clearUnusedRoute, closeOverlayScreens]);
 
   const openLeaderboardScreen = useCallback(() => {
     closeOverlayScreens();
@@ -862,15 +975,34 @@ export default function Home() {
       mode: suggestion.mode,
       minutes: nextMinutes,
       interests: suggestion.interests,
+      suggestionId: suggestion.id,
       start,
       startName,
       preferUnexplored,
     });
   }, [applyPlan, closeOverlayScreens, preferUnexplored, start, startName]);
 
+  const currentRouteTrials = useMemo(() => {
+    if (!hasRoute || !activePlan) return [];
+    const trialId = activePlan.savedTrialId ?? (justSaved?.plan === activePlan ? justSaved.trialId : undefined);
+    const key = routeKeyFor({ mode: activePlan.mode, start: activePlan.start, stopNames: displayRoute.stops.map((stop) => stop.name) });
+    return savedTrials.filter((trial) => trial.id === trialId || routeKeyFor(trial) === key);
+  }, [activePlan, displayRoute.stops, hasRoute, justSaved, savedTrials]);
+  const currentRouteSaved = currentRouteTrials.length > 0;
+
+  const removeTrial = useCallback((id: string) => {
+    deleteSavedTrial(id);
+    setSavedTrials((current) => current.filter((trial) => trial.id !== id));
+    void removeCloudTrial(id);
+  }, []);
+
+  // Saves in place (no jump to the Saved screen) so the walk can still be started.
+  // Tapping again on a saved route unsaves it; the route itself stays on screen.
   const handleSaveTrial = useCallback(() => {
-    if (!hasRoute || !activePlan) {
-      openSavedScreen("Generate a wander first, then save it.");
+    if (!hasRoute || !activePlan) return;
+    if (currentRouteSaved) {
+      currentRouteTrials.forEach((trial) => removeTrial(trial.id));
+      setJustSaved(null);
       return;
     }
     const next = saveTrial({
@@ -878,22 +1010,37 @@ export default function Home() {
       minutes: activePlan.minutes,
       interests: activePlan.interests,
       start: activePlan.start,
+      geometry: displayRoute.geometry.filter((_, index) => index % Math.max(1, Math.ceil(displayRoute.geometry.length / 64)) === 0),
       startName: activePlan.startName,
       stopNames: displayRoute.stops.map((stop) => stop.name),
       walkingMinutes: displayRoute.walkingMinutes,
       distanceKm: displayRoute.distanceKm,
       title: displayRoute.title,
+      preferUnexplored: activePlan.preferUnexplored,
+      focusPlaceId: activePlan.focusPlaceId,
+      focusDestination: activePlan.focusDestination,
+      remixSeed: activePlan.remixSeed,
+      excludePlaceIds: activePlan.excludePlaceIds,
+      route,
+      optionalActive: optionalRouteActive,
     });
     setSavedTrials(next);
     const localTrial = next[0];
     if (localTrial) {
+      setJustSaved({ plan: activePlan, trialId: localTrial.id });
       void syncSavedTrial(localTrial).then((cloudTrial) => {
         if (!cloudTrial) return;
+        // Unsaved before the cloud copy came back: drop the cloud copy too.
+        if (!readSavedTrials().some((trial) => trial.id === localTrial.id)) {
+          void removeCloudTrial(cloudTrial.id);
+          return;
+        }
+        writeSavedTrials(readSavedTrials().map((trial) => (trial.id === localTrial.id ? cloudTrial : trial)));
         setSavedTrials((current) => [cloudTrial, ...current.filter((trial) => trial.id !== localTrial.id)]);
+        setJustSaved((current) => (current?.trialId === localTrial.id ? { ...current, trialId: cloudTrial.id } : current));
       });
     }
-    openSavedScreen(null);
-  }, [activePlan, displayRoute.distanceKm, displayRoute.stops, displayRoute.title, displayRoute.walkingMinutes, hasRoute, openSavedScreen]);
+  }, [activePlan, currentRouteSaved, currentRouteTrials, removeTrial, optionalRouteActive, route, displayRoute.distanceKm, displayRoute.geometry, displayRoute.stops, displayRoute.title, displayRoute.walkingMinutes, hasRoute]);
 
   const restoreTrial = useCallback((trial: SavedTrial) => {
     const nextMinutes = Math.max(5, Math.min(180, Math.round(trial.minutes)));
@@ -915,6 +1062,14 @@ export default function Home() {
       interests: trial.interests,
       start: trial.start,
       startName: trial.startName,
+      preferUnexplored: trial.preferUnexplored,
+      focusPlaceId: trial.focusPlaceId,
+      focusDestination: trial.focusDestination,
+      remixSeed: trial.remixSeed,
+      excludePlaceIds: trial.excludePlaceIds,
+      savedTrialId: trial.id,
+      pinnedRoute: pinnedRouteFor(trial),
+      pinnedOptionalActive: trial.optionalActive,
     });
     setSavedOpen(false);
     setSaveNote(null);
@@ -945,9 +1100,9 @@ export default function Home() {
   );
   const fogPercentLabel = friendsFogView ? friendsFogPercent : explorationPercent;
 
-  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen && !leaderboardOpen && !friendsFogView;
+  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen && !leaderboardOpen && !profileOpen && !friendsFogView;
   const showHomeDock = !plannerOpen && !wanderSheetOpen && !walkingActive && !leaderboardOpen && !friendsFogView;
-  const tabScreenOpen = savedOpen || exploreOpen || memoriesOpen || friendsOpen || leaderboardOpen;
+  const tabScreenOpen = savedOpen || exploreOpen || memoriesOpen || friendsOpen || leaderboardOpen || profileOpen;
 
   function toggleFog() {
     if (fogActive) {
@@ -982,8 +1137,20 @@ export default function Home() {
   }
 
   function startWalk() {
+    setWalkHistoryMoment(null);
+    setHistoryLayer(true);
+    setWalkLocationStatus(navigator.geolocation ? "locating" : "unavailable");
     setWanderSheetOpen(false);
     setWalkingActive(true);
+    if (!walkId || !activePlan || walkPlan !== activePlan) {
+      setWalkId(createId("walk"));
+      setWalkPlan(activePlan);
+      setWalkMemorySaved(false);
+      walkStartedAtRef.current = new Date().toISOString();
+      walkCapturesRef.current = [];
+      seenWalkHistorySitesRef.current = new Set();
+      seenWalkStopsRef.current = new Set();
+    }
     setWalkStopIndex(0);
     setWalkPosition(null);
     setFogActive(false);
@@ -994,13 +1161,34 @@ export default function Home() {
 
   function exitWalk() {
     setWalkingActive(false);
+    setWalkHistoryMoment(null);
     setWalkStopIndex(0);
     setWalkPosition(null);
     setWanderSheetOpen(true);
   }
 
   function finishWalk() {
+    // One award per walk: the walk id is the points event key, so repeats are ignored.
+    if (walkId) completeWalk(`walk:${walkId}`, displayRoute.walkingMinutes, walkMemorySaved);
+    if (walkStartedAtRef.current) {
+      recordWalkHistory({
+        startedAt: walkStartedAtRef.current,
+        mode: activePlan?.mode ?? mode,
+        title: displayRoute.title,
+        startName: activePlan?.startName ?? startName,
+        start: activePlan?.start ?? start,
+        stopNames: displayRoute.stops.map((stop) => stop.name),
+        walkingMinutes: displayRoute.walkingMinutes,
+        distanceKm: displayRoute.distanceKm,
+        captures: walkCapturesRef.current,
+      });
+      walkStartedAtRef.current = null;
+      walkCapturesRef.current = [];
+    }
     setWalkingActive(false);
+    setWalkHistoryMoment(null);
+    setWalkId(null);
+    setWalkPlan(null);
     setWalkStopIndex(0);
     setWalkPosition(null);
     clearUnusedRoute();
@@ -1008,11 +1196,75 @@ export default function Home() {
     window.setTimeout(() => setCelebratingFinish(false), 1800);
   }
 
+  // Must run inside the button's click so mobile browsers allow the camera to open.
+  function openMemoryCamera() {
+    const input = memoryInputRef.current;
+    if (!input) return;
+    input.value = "";
+    input.click();
+  }
+
   function captureWalkMoment() {
+    if (walkMemorySaved || !walkId) return;
+    if (!hasSeenMemoryRule()) {
+      setMemoryStep("intro");
+      return;
+    }
+    openMemoryCamera();
+  }
+
+  function closeMemoryDialog() {
+    if (memorySaving) return;
+    if (memoryPhoto) URL.revokeObjectURL(memoryPhoto.url);
+    setMemoryPhoto(null);
+    setMemoryError(null);
+    setMemoryStep(null);
+  }
+
+  function handleMemoryPhoto(file: File | undefined) {
+    if (!file) return;
+    if (memoryPhoto) URL.revokeObjectURL(memoryPhoto.url);
+    setMemoryPhoto({ file, url: URL.createObjectURL(file) });
+    setMemoryError(null);
+    setMemoryStep("preview");
+  }
+
+  async function keepWalkMemory() {
+    if (!walkId || !memoryPhoto || memorySaving) return;
+    setMemorySaving(true);
+    setMemoryError(null);
     const stop = displayRoute.stops[Math.min(walkStopIndex, Math.max(displayRoute.stops.length - 1, 0))];
-    if (stop) handleExploreStop(stop.id);
-    exitWalk();
-    openMemoriesScreen();
+    const details = { walkId, routeTitle: displayRoute.title, stopId: stop?.id, stopName: stop?.name, photo: memoryPhoto.file };
+    // Check local storage first so a walk that already has a memory never uploads another.
+    if (await getMemoryForWalk(walkId)) {
+      setMemorySaving(false);
+      setWalkMemorySaved(true);
+      setMemoryError(ALREADY_SAVED_MESSAGE);
+      return;
+    }
+    // When Supabase is configured, its unique (user_id, walk_id) constraint is the final word.
+    const cloud = await syncWalkMemory(details).catch(() => "error" as const);
+    if (cloud === "duplicate") {
+      setMemorySaving(false);
+      setWalkMemorySaved(true);
+      setMemoryError("This walk already has a memory saved to your account. One memory per walk, so make it count.");
+      return;
+    }
+    const result = await saveWalkMemory(details);
+    setMemorySaving(false);
+    if (!result.ok) {
+      if (result.reason === "already-saved") setWalkMemorySaved(true);
+      setMemoryError(result.message);
+      return;
+    }
+    if (stop) {
+      handleExploreStop(stop.id);
+      walkCapturesRef.current = [...walkCapturesRef.current, { stopName: stop.name, capturedAt: new Date().toISOString() }];
+    }
+    setWalkMemorySaved(true);
+    URL.revokeObjectURL(memoryPhoto.url);
+    setMemoryPhoto(null);
+    setMemoryStep(null);
   }
 
   function goHomeTab(tab: typeof homeTab) {
@@ -1071,6 +1323,7 @@ export default function Home() {
         exploredIds={exploredIds}
         exploredTrail={exploredTrail}
         fogActive={fogActive}
+        historyLayer={historyLayer}
         showRoute={hasRoute && readyRouteKey === loopKey}
         walkMode={walkingActive}
         walkStopIndex={walkStopIndex}
@@ -1100,10 +1353,7 @@ export default function Home() {
               type="button"
               className="home-profile"
               aria-label="Open profile"
-              onClick={() => {
-                setQuestsOpen(false);
-                setSelectedQuestId(null);
-              }}
+              onClick={openProfileScreen}
             >
               <span aria-hidden="true">AS</span>
             </button>
@@ -1151,6 +1401,16 @@ export default function Home() {
           </header>
 
           <aside className="home-rail" aria-label="Map controls">
+            <button
+              type="button"
+              className={`home-rail-chip${historyLayer ? " is-on" : ""}`}
+              aria-pressed={historyLayer}
+              aria-label={historyLayer ? "Turn history layer off" : "Turn history layer on"}
+              onClick={() => setHistoryLayer((current) => !current)}
+            >
+              <BookOpen size={18} strokeWidth={2.2} />
+              <span>History</span>
+            </button>
             <button
               type="button"
               className={`home-rail-chip${fogActive ? " is-on" : ""}`}
@@ -1290,7 +1550,7 @@ export default function Home() {
       )}
 
       {memoriesOpen && !fogActive && (
-        <MemoriesScreen onAddMemory={() => openPlanner()} />
+        <MemoriesScreen />
       )}
 
       {friendsOpen && !fogActive && (
@@ -1315,6 +1575,10 @@ export default function Home() {
         />
       )}
 
+      {profileOpen && !fogActive && (
+        <ProfileScreen onClose={() => goHomeTab("map")} />
+      )}
+
       {leaderboardOpen && !fogActive && (
         <LeaderboardScreen onClose={() => setLeaderboardOpen(false)} />
       )}
@@ -1324,11 +1588,7 @@ export default function Home() {
           trials={savedTrials}
           note={saveNote}
           onOpenTrial={restoreTrial}
-          onRemoveTrial={(id) => {
-            deleteSavedTrial(id);
-            setSavedTrials((current) => current.filter((trial) => trial.id !== id));
-            void removeCloudTrial(id);
-          }}
+          onRemoveTrial={removeTrial}
         />
       )}
 
@@ -1362,7 +1622,7 @@ export default function Home() {
                   onSelect={(suggestion) => applyStart(suggestion, { fromUser: true })}
                   onUseMyLocation={useMyLocation}
                   locating={locationStatus === "locating"}
-                  statusNote={null}
+                  statusNote={locationMessage}
                 />
                 <fieldset className="mode-switch" aria-label="Route mode">
                   <button className={mode === "discover" ? "active" : ""} onClick={() => setMode("discover")} type="button"><Leaf size={18} /> Discover</button>
@@ -1450,6 +1710,7 @@ export default function Home() {
               startWalk();
             }}
             onSave={handleSaveTrial}
+            saved={currentRouteSaved}
             onClose={closeWanderSheet}
             onDropBuddy={dropStreetViewBuddy}
           />
@@ -1526,15 +1787,58 @@ export default function Home() {
       {walkingActive && hasRoute && (
         <WalkModeChrome
           route={displayRoute}
+          reviewTrailId={activePlan?.suggestionId ?? `route:${displayRoute.title}:${displayRoute.stops.map((stop) => stop.id).join("-")}`}
           currentStopIndex={walkStopIndex}
+          locationStatus={walkLocationStatus}
+          historyMoment={walkHistoryMoment}
           onBack={exitWalk}
           onFinish={finishWalk}
           onCapture={captureWalkMoment}
+          memorySaved={walkMemorySaved}
+          routeSaved={currentRouteSaved}
+          onSaveRoute={handleSaveTrial}
+          onDismissHistoryMoment={dismissWalkHistoryMoment}
+          onAnotherFact={showAnotherWalkFact}
+          onSubmitReview={(trailId, rating, comment) => addTrailReview({
+            trailId,
+            rating,
+            comment,
+          })}
           onAdvance={() => {
             const stop = displayRoute.stops[walkStopIndex];
             if (stop) handleExploreStop(stop.id);
             setWalkStopIndex((current) => Math.min(displayRoute.stops.length, current + 1));
           }}
+        />
+      )}
+
+      {walkingActive && hasRoute && (
+        <input
+          ref={memoryInputRef}
+          className="walk-memory-input"
+          type="file"
+          accept="image/*"
+          capture="environment"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(event) => handleMemoryPhoto(event.target.files?.[0])}
+        />
+      )}
+
+      {memoryStep && (
+        <WalkMemoryDialog
+          step={memoryStep}
+          previewUrl={memoryPhoto?.url ?? null}
+          saving={memorySaving}
+          error={memoryError}
+          onOpenCamera={() => {
+            markMemoryRuleSeen();
+            setMemoryStep(null);
+            openMemoryCamera();
+          }}
+          onRetake={openMemoryCamera}
+          onKeep={() => void keepWalkMemory()}
+          onClose={closeMemoryDialog}
         />
       )}
 
