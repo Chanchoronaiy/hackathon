@@ -32,8 +32,8 @@ import {
   REMIX_PACK_PRICE,
   REMIX_PACK_TRIES,
 } from "@/lib/remix-tries";
-import { HISTORY_SITES, type HistoryImagePair } from "@/lib/history-sites";
-import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
+import { HISTORY_SITES, type HistoryImagePair, type HistorySite } from "@/lib/history-sites";
+import { planWanderRoute, type LatLng, type RouteStop, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, pinnedRouteFor, readSavedTrials, routeKeyFor, saveTrial, writeSavedTrials, type SavedTrial } from "@/lib/saved-trials";
 import { addTrailReview } from "@/lib/trail-reviews";
@@ -58,12 +58,20 @@ type WalkLocationStatus = "locating" | "located" | "unavailable";
 type WalkHistoryMoment = {
   siteName: string;
   fact: string;
-  facts?: string[];
-  factIndex?: number;
   beforeAfter?: HistoryImagePair;
   sourceLabel?: string;
   sourceUrl?: string;
 };
+
+function historySiteMoment(site: HistorySite): WalkHistoryMoment {
+  return {
+    siteName: site.name,
+    fact: site.facts[Math.floor(Math.random() * site.facts.length)],
+    beforeAfter: site.beforeAfter,
+    sourceLabel: site.sourceLabel,
+    sourceUrl: site.sourceUrl,
+  };
+}
 type Plan = {
   mode: Mode;
   minutes: number;
@@ -537,13 +545,18 @@ export default function Home() {
     setWalkHistoryMoment(null);
   }, []);
 
-  const showAnotherWalkFact = useCallback(() => {
-    setWalkHistoryMoment((current) => {
-      if (!current?.facts || current.facts.length < 2) return current;
-      const options = current.facts.map((_, index) => index).filter((index) => index !== current.factIndex);
-      const factIndex = options[Math.floor(Math.random() * options.length)];
-      return { ...current, factIndex, fact: current.facts[factIndex] };
-    });
+  /** What tapping Next shows for a stop: the same card GPS arrival would. */
+  const showStopMoment = useCallback((stop: RouteStop) => {
+    if (seenWalkStopsRef.current.has(stop.id)) return;
+    seenWalkStopsRef.current.add(stop.id);
+    const site = HISTORY_SITES.find((candidate) => distanceMetres(candidate.position, stop.position) <= 150);
+    if (site) {
+      if (seenWalkHistorySitesRef.current.has(site.id)) return;
+      seenWalkHistorySitesRef.current.add(site.id);
+      setWalkHistoryMoment(historySiteMoment(site));
+      return;
+    }
+    setWalkHistoryMoment({ siteName: stop.name, fact: stop.reason });
   }, []);
 
   useEffect(() => {
@@ -580,16 +593,7 @@ export default function Home() {
         ));
         if (nearbyHistorySite) {
           seenWalkHistorySitesRef.current.add(nearbyHistorySite.id);
-          const fact = nearbyHistorySite.facts[Math.floor(Math.random() * nearbyHistorySite.facts.length)];
-          setWalkHistoryMoment({
-            siteName: nearbyHistorySite.name,
-            fact,
-            facts: nearbyHistorySite.facts,
-            factIndex: nearbyHistorySite.facts.indexOf(fact),
-            beforeAfter: nearbyHistorySite.beforeAfter,
-            sourceLabel: nearbyHistorySite.sourceLabel,
-            sourceUrl: nearbyHistorySite.sourceUrl,
-          });
+          setWalkHistoryMoment(historySiteMoment(nearbyHistorySite));
         }
 
         const nextStop = displayRoute.stops[walkStopIndex];
@@ -1847,7 +1851,6 @@ export default function Home() {
           routeSaved={currentRouteSaved}
           onSaveRoute={handleSaveTrial}
           onDismissHistoryMoment={dismissWalkHistoryMoment}
-          onAnotherFact={showAnotherWalkFact}
           onSubmitReview={(trailId, rating, comment) => addTrailReview({
             trailId,
             rating,
@@ -1855,7 +1858,10 @@ export default function Home() {
           })}
           onAdvance={() => {
             const stop = displayRoute.stops[walkStopIndex];
-            if (stop) handleExploreStop(stop.id);
+            if (stop) {
+              handleExploreStop(stop.id);
+              showStopMoment(stop);
+            }
             setWalkStopIndex((current) => Math.min(displayRoute.stops.length, current + 1));
           }}
         />

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Bookmark, Camera, Check, CornerUpRight, Images, Shuffle, Star, X } from "lucide-react";
+import { ArrowLeft, Bookmark, Camera, Check, CornerUpRight, Images, Star, X } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import type { HistoryImagePair } from "@/lib/history-sites";
@@ -16,8 +16,6 @@ type WalkModeChromeProps = {
   historyMoment: {
     siteName: string;
     fact: string;
-    facts?: string[];
-    factIndex?: number;
     beforeAfter?: HistoryImagePair;
     sourceLabel?: string;
     sourceUrl?: string;
@@ -26,7 +24,6 @@ type WalkModeChromeProps = {
   onFinish: () => void;
   onCapture: () => void;
   onDismissHistoryMoment: () => void;
-  onAnotherFact: () => void;
   onSubmitReview: (trailId: string, rating: number, comment: string) => void;
   onAdvance?: () => void;
   /** This walk's one memory is already saved. */
@@ -55,7 +52,6 @@ export default function WalkModeChrome({
   onFinish,
   onCapture,
   onDismissHistoryMoment,
-  onAnotherFact,
   onSubmitReview,
   onAdvance,
   memorySaved = false,
@@ -114,19 +110,14 @@ export default function WalkModeChrome({
             </button>
           </div>
           <p>{historyMoment.fact}</p>
-          {historyMoment.beforeAfter ? (
-            <button type="button" className="walk-history-compare-trigger" onClick={() => setPhotoComparisonOpen(true)}>
-              <Images size={16} aria-hidden="true" /> View before &amp; after photos
-            </button>
-          ) : null}
           {historyMoment.sourceUrl && historyMoment.sourceLabel ? (
             <a href={historyMoment.sourceUrl} target="_blank" rel="noreferrer">Source: {historyMoment.sourceLabel}</a>
           ) : (
             <span className="walk-history-source">From the curated Adelaide place guide</span>
           )}
-          {historyMoment.facts && historyMoment.facts.length > 1 ? (
-            <button type="button" className="walk-history-another" onClick={onAnotherFact}>
-              <Shuffle size={14} aria-hidden="true" /> Another fact
+          {historyMoment.beforeAfter ? (
+            <button type="button" className="walk-history-compare-trigger" onClick={() => setPhotoComparisonOpen(true)}>
+              <Images size={16} aria-hidden="true" /> View before &amp; after photos
             </button>
           ) : null}
         </aside>

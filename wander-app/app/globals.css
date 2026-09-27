@@ -1726,7 +1726,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 }
 .walk-history-toast p { margin:7px 0; font-size:14px; font-weight:700; line-height:1.4; }
 .walk-history-compare-trigger {
-  display:inline-flex; align-items:center; gap:7px; min-height:34px; margin:4px 0 7px; padding:0 11px;
+  display:flex; width:fit-content; align-items:center; gap:7px; min-height:34px; margin:9px 0 2px; padding:0 11px;
   border:1px solid rgba(73,97,58,.22); border-radius:10px; background:rgba(142,166,107,.14);
   color:#3f5b35; font-size:12px; font-weight:800;
 }
@@ -1763,11 +1763,8 @@ button,input { font:inherit; } button { cursor:pointer; }
 .history-popup a,
 .walk-history-toast a { text-decoration:underline; text-underline-offset:3px; }
 .walk-history-source { color:#49613a; font-size:11px; font-weight:750; line-height:1.35; }
-.walk-history-another {
-  justify-self:start; display:inline-flex; align-items:center; gap:6px; min-height:30px; margin-top:3px;
-  padding:0 10px; border:1px solid rgba(73,97,58,.2); border-radius:999px;
-  background:rgba(142,166,107,.14); color:#3f5b35; font-size:11px; font-weight:800;
-}
+.walk-history-toast > a,
+.walk-history-toast > .walk-history-source { display:block; }
 @media (max-width:600px) {
   .walk-photo-comparison { padding:16px; }
   .walk-photo-comparison .walk-history-comparison { grid-template-columns:1fr; }

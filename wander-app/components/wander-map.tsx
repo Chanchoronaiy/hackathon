@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { LocateFixed } from "lucide-react";
 import { CircleMarker, MapContainer, Marker, Pane, Polyline, Popup, Rectangle, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
@@ -97,12 +97,26 @@ function CreamWash() {
   );
 }
 
-function Recenter({ position, zoom, animate = true }: { position: LatLng; zoom?: number; animate?: boolean }) {
+/**
+ * The latest value, for effects keyed on content rather than identity. Parents rebuild
+ * these arrays on every render (e.g. each drag updates the explored %), and re-running
+ * a fit on identity changes snaps the map back while the user is panning.
+ */
+function useLatest<T>(value: T) {
+  const ref = useRef(value);
+  useEffect(() => {
+    ref.current = value;
+  }, [value]);
+  return ref;
+}
+
+function Recenter({ position }: { position: LatLng }) {
   const map = useMap();
   const key = position.join(",");
+  const positionRef = useLatest(position);
   useEffect(() => {
-    map.setView(position, zoom ?? map.getZoom(), { animate });
-  }, [map, key, position, zoom, animate]);
+    map.setView(positionRef.current, map.getZoom(), { animate: true });
+  }, [map, key, positionRef]);
   return null;
 }
 
@@ -118,6 +132,7 @@ function WalkFollow({
 }) {
   const map = useMap();
   const key = position.join(",");
+  const positionRef = useLatest(position);
   const [zoomedIn, setZoomedIn] = useState(false);
 
   useEffect(() => {
@@ -140,12 +155,12 @@ function WalkFollow({
   useEffect(() => {
     if (!following) return;
     if (!zoomedIn) {
-      map.setView(position, 16, { animate: false });
+      map.setView(positionRef.current, 16, { animate: false });
       setZoomedIn(true);
       return;
     }
-    map.panTo(position, { animate: true });
-  }, [map, key, following, zoomedIn, position]);
+    map.panTo(positionRef.current, { animate: true });
+  }, [map, key, following, zoomedIn, positionRef]);
 
   return null;
 }
@@ -153,24 +168,28 @@ function WalkFollow({
 function FitRoute({ geometry, enabled }: { geometry: LatLng[]; enabled: boolean }) {
   const map = useMap();
   const key = geometry.map((point) => point.join(",")).join("|");
+  const geometryRef = useLatest(geometry);
   useEffect(() => {
-    if (!enabled || geometry.length < 2) return;
-    map.fitBounds(geometry, { padding: [72, 72], maxZoom: 16, animate: true });
-  }, [map, key, enabled, geometry]);
+    const points = geometryRef.current;
+    if (!enabled || points.length < 2) return;
+    map.fitBounds(points, { padding: [72, 72], maxZoom: 16, animate: true });
+  }, [map, key, enabled, geometryRef]);
   return null;
 }
 
 function FitPositions({ positions, enabled }: { positions: LatLng[]; enabled: boolean }) {
   const map = useMap();
   const key = positions.map((point) => point.join(",")).join("|");
+  const positionsRef = useLatest(positions);
   useEffect(() => {
-    if (!enabled || positions.length === 0) return;
-    if (positions.length === 1) {
-      map.setView(positions[0], 15, { animate: true });
+    const points = positionsRef.current;
+    if (!enabled || points.length === 0) return;
+    if (points.length === 1) {
+      map.setView(points[0], 15, { animate: true });
       return;
     }
-    map.fitBounds(positions, { padding: [80, 100], maxZoom: 15, animate: true });
-  }, [map, key, enabled, positions]);
+    map.fitBounds(points, { padding: [80, 100], maxZoom: 15, animate: true });
+  }, [map, key, enabled, positionsRef]);
   return null;
 }
 
