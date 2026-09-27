@@ -46,13 +46,13 @@ export const HISTORY_SITES: HistorySite[] = [
     sourceUrl: "https://www.botanicgardens.sa.gov.au/about/about-bgsh/history/adelaide-botanic-gardens-history",
     beforeAfter: {
       before: {
-        url: "https://upload.wikimedia.org/wikipedia/commons/c/c7/Aufriss_Adelaide_Palm_House.jpg",
+        url: "/images/palm-house-elevation.jpg",
         label: "Palm House elevation, 1874",
         credit: "Unknown author · Public domain",
         sourceUrl: "https://commons.wikimedia.org/wiki/File:Aufriss_Adelaide_Palm_House.jpg",
       },
       after: {
-        url: "https://upload.wikimedia.org/wikipedia/commons/0/01/Palm_House%2C_Adelaide_Botanic_Gardens.jpg",
+        url: "/images/palm-house-exterior.jpg",
         label: "Palm House exterior, 2021",
         credit: "Ashton 29 · CC BY-SA 4.0",
         sourceUrl: "https://commons.wikimedia.org/wiki/File:Palm_House,_Adelaide_Botanic_Gardens.jpg",
@@ -71,13 +71,13 @@ export const HISTORY_SITES: HistorySite[] = [
     sourceUrl: "https://www.history.sa.gov.au/migration-museum-renewal/",
     beforeAfter: {
       before: {
-        url: "https://upload.wikimedia.org/wikipedia/commons/f/fc/Destitute_Asylum_1024.jpg",
+        url: "/images/destitute-asylum.jpg",
         label: "Destitute Asylum site, c.1868",
         credit: "State Library of South Australia · CC0",
         sourceUrl: "https://commons.wikimedia.org/wiki/File:Destitute_Asylum_1024.jpg",
       },
       after: {
-        url: "https://upload.wikimedia.org/wikipedia/commons/b/b3/Migration_Museum%2C_Adelaide_-_former_Destitute_Asylum_building.JPG",
+        url: "/images/migration-museum.jpg",
         label: "Former asylum building, 2012",
         credit: "Bahudhara · CC BY-SA 3.0",
         sourceUrl: "https://commons.wikimedia.org/wiki/File:Migration_Museum,_Adelaide_-_former_Destitute_Asylum_building.JPG",

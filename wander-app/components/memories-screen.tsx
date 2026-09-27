@@ -12,6 +12,7 @@ type Moment = {
   day: string;
   tone: MomentTone;
   icon: MomentIcon;
+  photoSrc?: string;
   mark?: string;
   label: string;
 };
@@ -65,14 +66,14 @@ const MONTHS: MonthGroup[] = [
     title: "May 2025",
     count: 8,
     moments: [
-      { id: "m1", day: "28", tone: "sage", icon: "tree", label: "Park canopy" },
-      { id: "m2", day: "26", tone: "sand", icon: "coffee", mark: "O", label: "Laneway coffee" },
-      { id: "m3", day: "24", tone: "blue", icon: "building", label: "Street facade" },
-      { id: "m4", day: "22", tone: "lavender", icon: "bridge", mark: "P", label: "River bridge" },
-      { id: "m5", day: "19", tone: "olive", icon: "bench", label: "Evening bench" },
-      { id: "m6", day: "16", tone: "clay", icon: "circles", mark: "S", label: "Plaza pause" },
-      { id: "m7", day: "12", tone: "sage", icon: "lamp", label: "Night walk" },
-      { id: "m8", day: "09", tone: "blue", icon: "coffee", label: "Morning brew" },
+      { id: "m1", day: "28", tone: "sage", icon: "tree", photoSrc: "/pic%201.jpg", label: "Park canopy" },
+      { id: "m2", day: "26", tone: "sand", icon: "coffee", photoSrc: "/pic%203.jpg", mark: "O", label: "Laneway coffee" },
+      { id: "m3", day: "24", tone: "blue", icon: "building", photoSrc: "/pic%204.jpg", label: "Street facade" },
+      { id: "m4", day: "22", tone: "lavender", icon: "bridge", photoSrc: "/pic%205.jpg", mark: "P", label: "River bridge" },
+      { id: "m5", day: "19", tone: "olive", icon: "bench", photoSrc: "/pic%206.png", label: "Evening bench" },
+      { id: "m6", day: "16", tone: "clay", icon: "circles", photoSrc: "/pic%207.jpg", mark: "S", label: "Plaza pause" },
+      { id: "m7", day: "12", tone: "sage", icon: "lamp", photoSrc: "/pic%208.jpg", label: "Night walk" },
+      { id: "m8", day: "09", tone: "blue", icon: "coffee", photoSrc: "/pic%209.jpg", label: "Morning brew" },
     ],
   },
   {
@@ -80,24 +81,27 @@ const MONTHS: MonthGroup[] = [
     title: "April 2025",
     count: 6,
     moments: [
-      { id: "a1", day: "27", tone: "lavender", icon: "tree", mark: "S", label: "Autumn leaves" },
-      { id: "a2", day: "21", tone: "sand", icon: "building", label: "Market corner" },
-      { id: "a3", day: "18", tone: "sage", icon: "bridge", label: "Torrens edge" },
-      { id: "a4", day: "14", tone: "olive", icon: "coffee", mark: "P", label: "Shared espresso" },
-      { id: "a5", day: "08", tone: "blue", icon: "bench", label: "Quiet square" },
-      { id: "a6", day: "03", tone: "clay", icon: "circles", label: "Art stop" },
+      { id: "a1", day: "27", tone: "lavender", icon: "tree", photoSrc: "/pic%2010.jpg", mark: "S", label: "Autumn leaves" },
+      { id: "a2", day: "21", tone: "sand", icon: "building", photoSrc: "/pic%2011.jpg", label: "Market corner" },
+      { id: "a3", day: "18", tone: "sage", icon: "bridge", photoSrc: "/pic%2012.jpg", label: "Torrens edge" },
+      { id: "a4", day: "14", tone: "olive", icon: "coffee", photoSrc: "/pic%2013.jpg", mark: "P", label: "Shared espresso" },
+      { id: "a5", day: "08", tone: "blue", icon: "bench", photoSrc: "/pic%2014.jpg", label: "Quiet square" },
+      { id: "a6", day: "03", tone: "clay", icon: "circles", photoSrc: "/pic%2015.jpg", label: "Art stop" },
     ],
   },
   {
     id: "mar-2025",
     title: "March 2025",
-    count: 5,
+    count: 8,
     moments: [
-      { id: "c1", day: "29", tone: "sage", icon: "lamp", label: "Late stroll" },
-      { id: "c2", day: "22", tone: "lavender", icon: "coffee", mark: "O", label: "First wander" },
-      { id: "c3", day: "17", tone: "sand", icon: "tree", label: "Botanic path" },
-      { id: "c4", day: "11", tone: "blue", icon: "building", label: "North Terrace" },
-      { id: "c5", day: "04", tone: "olive", icon: "bridge", mark: "S", label: "Footbridge" },
+      { id: "c1", day: "29", tone: "sage", icon: "lamp", photoSrc: "/pic%2016.jpg", label: "Late stroll" },
+      { id: "c2", day: "22", tone: "lavender", icon: "coffee", photoSrc: "/pic%2017.jpg", mark: "O", label: "First wander" },
+      { id: "c3", day: "17", tone: "sand", icon: "tree", photoSrc: "/pic%2018.jpg", label: "Botanic path" },
+      { id: "c4", day: "11", tone: "blue", icon: "building", photoSrc: "/pic%2019.jpg", label: "North Terrace" },
+      { id: "c5", day: "04", tone: "olive", icon: "bridge", photoSrc: "/pic%2020.jpg", mark: "S", label: "Footbridge" },
+      { id: "c6", day: "03", tone: "clay", icon: "tree", photoSrc: "/pic%2021.jpg", label: "Garden walk" },
+      { id: "c7", day: "02", tone: "sage", icon: "building", photoSrc: "/pic%2022.jpg", label: "City detail" },
+      { id: "c8", day: "01", tone: "sand", icon: "lamp", photoSrc: "/Summer%20sunset.jpg", label: "Summer sunset" },
     ],
   },
 ];
@@ -193,7 +197,7 @@ export default function MemoriesScreen() {
         </button>
       </header>
 
-      <p className="memories-stats">19 memories · 11 walks · 27 km</p>
+      <p className="memories-stats">22 memories · 11 walks · 27 km</p>
 
       <input
         ref={photoInputRef}
@@ -229,19 +233,22 @@ export default function MemoriesScreen() {
             <div className="memories-grid">
               {month.moments.map((moment, index) => {
                 const photo = monthPhotos[index];
-                return photo ? (
+                const photoSrc = photo?.src ?? moment.photoSrc;
+                return photoSrc ? (
                   <div key={moment.id} className="memories-tile memories-photo-tile">
-                    <Image className="memories-photo-image" src={photo.src} alt={`${moment.label}, ${month.title}`} fill sizes="25vw" unoptimized />
+                    <Image className="memories-photo-image" src={photoSrc} alt={`${moment.label}, ${month.title}`} fill sizes="25vw" unoptimized />
                     <span className="memories-tile-day">{moment.day}</span>
-                    <button
-                      type="button"
-                      className="memories-photo-delete"
-                      aria-label={`Delete photo from ${month.title}`}
-                      title="Delete photo"
-                      onClick={() => handleDeletePhoto(photo.id)}
-                    >
-                      <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
-                    </button>
+                    {photo ? (
+                      <button
+                        type="button"
+                        className="memories-photo-delete"
+                        aria-label={`Delete photo from ${month.title}`}
+                        title="Delete photo"
+                        onClick={() => handleDeletePhoto(photo.id)}
+                      >
+                        <Trash2 size={15} strokeWidth={2.2} aria-hidden="true" />
+                      </button>
+                    ) : null}
                   </div>
                 ) : (
                   <button

@@ -228,7 +228,7 @@ export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: Ex
           >
             <span className="explore-collection-image is-coffee-photo">
               <Image
-                src="https://upload.wikimedia.org/wikipedia/commons/9/9f/Flat_white_at_an_Adelaide_cafe.jpg"
+                src="/images/adelaide-flat-white.jpg"
                 alt="Flat white served at an Adelaide cafe"
                 fill
                 sizes="56px"
@@ -251,7 +251,7 @@ export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: Ex
             onClick={() => onOpenCollection?.("heritage")}
           >
             <span className="explore-collection-image">
-              <Image src="https://upload.wikimedia.org/wikipedia/commons/6/67/Heritage-listed_building_on_Pennington_Terrace%2C_North_Adelaide_%28028A8523%29.jpg" alt="Heritage-listed terrace building in North Adelaide" fill sizes="56px" unoptimized />
+              <Image src="/images/north-adelaide-heritage.jpg" alt="Heritage-listed terrace building in North Adelaide" fill sizes="56px" unoptimized />
             </span>
             <span className="explore-collection-copy">
               <strong>North Adelaide heritage</strong>
