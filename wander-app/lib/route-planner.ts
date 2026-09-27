@@ -233,6 +233,8 @@ export function planWanderRoute({
       }
       if (scenicPicks.length >= Math.min(3, Math.max(1, Math.floor(budget / 25)))) break;
     }
+    // Quests always offer at least one optional scenic stop, even when it runs over the time budget.
+    if (scenicPicks.length === 0 && rotated[0]) scenicPicks.push(rotated[0].place);
 
     const orderedScenic = orderAsLoop(start, scenicPicks);
     const questStop: RouteStop = {

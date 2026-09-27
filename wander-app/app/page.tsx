@@ -11,6 +11,7 @@ import MemoriesScreen from "@/components/memories-screen";
 import ProfileScreen from "@/components/profile-screen";
 import SavedScreen from "@/components/saved-screen";
 import WalkMemoryDialog from "@/components/walk-memory-dialog";
+import CameraCapture from "@/components/camera-capture";
 import WalkModeChrome from "@/components/walk-mode-chrome";
 import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
@@ -246,7 +247,7 @@ export default function Home() {
   const [memoryPhoto, setMemoryPhoto] = useState<{ file: File; url: string } | null>(null);
   const [memorySaving, setMemorySaving] = useState(false);
   const [memoryError, setMemoryError] = useState<string | null>(null);
-  const memoryInputRef = useRef<HTMLInputElement>(null);
+  const [memoryCameraOpen, setMemoryCameraOpen] = useState(false);
   const [heatEscapeOpen, setHeatEscapeOpen] = useState(false);
   const [heatEscape, setHeatEscape] = useState<{ shade: number } | null>(null);
   const [savedOpen, setSavedOpen] = useState(false);
@@ -1198,10 +1199,7 @@ export default function Home() {
 
   // Must run inside the button's click so mobile browsers allow the camera to open.
   function openMemoryCamera() {
-    const input = memoryInputRef.current;
-    if (!input) return;
-    input.value = "";
-    input.click();
+    setMemoryCameraOpen(true);
   }
 
   function captureWalkMoment() {
@@ -1321,7 +1319,13 @@ export default function Home() {
         <button type="button" className={`optional-route-toggle${optionalRouteActive ? " is-active" : ""}`}
           aria-pressed={optionalRouteActive}
           onClick={() => setOptionalRouteActive((current) => !current)}>
-          {optionalRouteActive ? "✓ Optional route added · tap to remove" : "＋ Optional route · tap here or the grey line to add"}
+          {(() => {
+            const names = (route.optionalStops ?? []).map((stop) => stop.name).join(", ");
+            const extra = Math.max(0, (route.optionalWalkingMinutes ?? route.walkingMinutes) - route.walkingMinutes);
+            return optionalRouteActive
+              ? `✓ Via ${names} added · tap to remove`
+              : `＋ Optional route via ${names}${extra > 0 ? ` · +${extra} min` : ""}`;
+          })()}
         </button>
       )}
       <WanderMap
@@ -1819,16 +1823,14 @@ export default function Home() {
         />
       )}
 
-      {walkingActive && hasRoute && (
-        <input
-          ref={memoryInputRef}
-          className="walk-memory-input"
-          type="file"
-          accept="image/*"
-          capture="environment"
-          tabIndex={-1}
-          aria-hidden="true"
-          onChange={(event) => handleMemoryPhoto(event.target.files?.[0])}
+      {walkingActive && hasRoute && memoryCameraOpen && (
+        <CameraCapture
+          title="Capture a memory"
+          onClose={() => setMemoryCameraOpen(false)}
+          onCapture={(file) => {
+            setMemoryCameraOpen(false);
+            handleMemoryPhoto(file);
+          }}
         />
       )}
 

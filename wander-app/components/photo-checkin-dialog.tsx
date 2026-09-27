@@ -6,6 +6,7 @@ import { distanceMetres } from "@/lib/exploration";
 import { awardPoints } from "@/lib/gamification";
 import { submitCloudCheckin } from "@/lib/cloud-data";
 import type { LatLng } from "@/lib/route-planner";
+import CameraCapture from "@/components/camera-capture";
 
 export default function PhotoCheckinDialog({
   eventId,
@@ -23,6 +24,7 @@ export default function PhotoCheckinDialog({
   onVerified: (totalPoints: number) => void;
 }) {
   const [photo, setPhoto] = useState<File | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const [status, setStatus] = useState<"idle" | "checking" | "verified" | "too-far" | "location-error">("idle");
 
   function verify() {
@@ -65,11 +67,10 @@ export default function PhotoCheckinDialog({
         <p className="checkin-kicker">Photo check-in · +{points} points</p>
         <h2 id="checkin-title">Prove you reached {placeName}</h2>
         <p>Take a photo and allow location access. Wander checks that you are within 100 metres.</p>
-        <label className="checkin-photo">
+        <button type="button" className="checkin-photo" onClick={() => setCameraOpen(true)}>
           <Camera size={18} aria-hidden="true" />
-          <span>{photo ? photo.name : "Take or choose a photo"}</span>
-          <input type="file" accept="image/*" capture="environment" onChange={(event) => setPhoto(event.target.files?.[0] ?? null)} />
-        </label>
+          <span>{photo ? "Photo ready ✓ · tap to retake" : "Open camera"}</span>
+        </button>
         {status === "too-far" ? <p className="checkin-error"><MapPin size={15} /> Move closer to the destination and try again.</p> : null}
         {status === "location-error" ? <p className="checkin-error"><MapPin size={15} /> A photo and location permission are required.</p> : null}
         {status === "verified" ? <p className="checkin-success"><CheckCircle2 size={17} /> Verified — points added!</p> : null}
@@ -77,6 +78,16 @@ export default function PhotoCheckinDialog({
           {status === "checking" ? "Checking location…" : status === "verified" ? "Verified" : "Verify check-in"}
         </button>
       </section>
+      {cameraOpen ? (
+        <CameraCapture
+          title={`Check in at ${placeName}`}
+          onClose={() => setCameraOpen(false)}
+          onCapture={(file) => {
+            setPhoto(file);
+            setCameraOpen(false);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
