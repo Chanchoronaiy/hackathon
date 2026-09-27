@@ -575,7 +575,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 .quests-alert {
   position:absolute; top:-9px; left:-7px; z-index:2;
   display:grid; place-items:center; width:20px; height:20px;
-  border-radius:50%; background:var(--rose, #d97c7c); color:#fffdf8;
+  border-radius:50%; background:#f24028; color:#fffdf8;
   font-size:13px; font-weight:900; line-height:1;
   box-shadow:0 4px 10px rgba(0,0,0,.2);
   transform:rotate(-14deg);
