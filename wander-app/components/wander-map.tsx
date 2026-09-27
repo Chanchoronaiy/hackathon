@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import L from "leaflet";
+import { LocateFixed } from "lucide-react";
 import { CircleMarker, MapContainer, Marker, Pane, Polyline, Popup, Rectangle, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { POI_DATA_TIMESTAMP } from "@/lib/adelaide-data";
 import { HISTORY_SITES } from "@/lib/history-sites";
@@ -102,6 +103,50 @@ function Recenter({ position, zoom, animate = true }: { position: LatLng; zoom?:
   useEffect(() => {
     map.setView(position, zoom ?? map.getZoom(), { animate });
   }, [map, key, position, zoom, animate]);
+  return null;
+}
+
+/** Keeps the walker in view until they drag, pinch or scroll the map themselves. */
+function WalkFollow({
+  position,
+  following,
+  onUserMove,
+}: {
+  position: LatLng;
+  following: boolean;
+  onUserMove: () => void;
+}) {
+  const map = useMap();
+  const key = position.join(",");
+  const [zoomedIn, setZoomedIn] = useState(false);
+
+  useEffect(() => {
+    const container = map.getContainer();
+    const onTouch = (event: TouchEvent) => {
+      if (event.touches.length > 1) onUserMove();
+    };
+    map.on("dragstart", onUserMove);
+    container.addEventListener("wheel", onUserMove, { passive: true });
+    container.addEventListener("touchstart", onTouch, { passive: true });
+    container.addEventListener("dblclick", onUserMove);
+    return () => {
+      map.off("dragstart", onUserMove);
+      container.removeEventListener("wheel", onUserMove);
+      container.removeEventListener("touchstart", onTouch);
+      container.removeEventListener("dblclick", onUserMove);
+    };
+  }, [map, onUserMove]);
+
+  useEffect(() => {
+    if (!following) return;
+    if (!zoomedIn) {
+      map.setView(position, 16, { animate: false });
+      setZoomedIn(true);
+      return;
+    }
+    map.panTo(position, { animate: true });
+  }, [map, key, following, zoomedIn, position]);
+
   return null;
 }
 
@@ -311,6 +356,11 @@ export default function WanderMap({
     );
     return walkGeometry[idx] ?? start.position;
   }, [walkMode, walkPosition, walkStopIndex, walkGeometry, walkStops.length, start.position]);
+  const [walkFollowing, setWalkFollowing] = useState(true);
+  const stopWalkFollowing = useCallback(() => setWalkFollowing(false), []);
+  useEffect(() => {
+    setWalkFollowing(true);
+  }, [walkMode]);
 
   return (
     <>
@@ -322,8 +372,10 @@ export default function WanderMap({
             attribution="© OpenStreetMap contributors"
           />
           <CreamWash />
-          {!questPins.length ? (
-            <Recenter position={walkMode ? youAreHere : start.position} zoom={walkMode ? 16 : undefined} animate={!walkMode} />
+          {walkMode ? (
+            <WalkFollow position={youAreHere} following={walkFollowing} onUserMove={stopWalkFollowing} />
+          ) : !questPins.length ? (
+            <Recenter position={start.position} />
           ) : null}
           <FitRoute
             geometry={[
@@ -523,6 +575,16 @@ export default function WanderMap({
             <rect width="100%" height="100%" fill="#a6a5ad" fillOpacity={0.72} mask="url(#wander-fog-mask)" />
           )}
         </svg>
+      )}
+      {walkMode && !walkFollowing && (
+        <button
+          type="button"
+          className="walk-recenter"
+          aria-label="Recenter on my location"
+          onClick={() => setWalkFollowing(true)}
+        >
+          <LocateFixed size={19} strokeWidth={2.3} aria-hidden="true" />
+        </button>
       )}
     </>
   );

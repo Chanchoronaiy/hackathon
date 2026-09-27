@@ -21,7 +21,7 @@ import type { Map as LeafletMap } from "leaflet";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
 import { measureRoute, projectAlong, stopAlongs } from "@/lib/walk-progress";
-import { completeWalk, dailyQuests, isQuestCompleted, localDateKey, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
+import { completeDailyQuest, completeWalk, dailyQuests, isQuestCompleted, localDateKey, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
 import {
   canRemix,
   consumeRemixTry,
@@ -481,24 +481,23 @@ export default function Home() {
       setGenerating(false);
       return;
     }
-    const frame = requestAnimationFrame(() => {
-      setPlannerNotice(null);
-      setActivePlan(plan);
-      setOrsOverride(null);
-      setFogActive(false);
-      setPlannerOpen(false);
-      setWanderSheetOpen(true);
-      setGenerating(false);
-      if (plan.mode === "heat" && preview.shadeEstimate != null) {
-        setHeatEscape({
-          shade: preview.shadeEstimate,
-        });
-        setHeatEscapeOpen(true);
-      } else {
-        setHeatEscapeOpen(false);
-      }
-    });
-    void frame;
+    // Applied synchronously: requestAnimationFrame pauses while the page isn't painting
+    // (e.g. behind a location permission prompt), which left quest routes never showing.
+    setPlannerNotice(null);
+    setActivePlan(plan);
+    setOrsOverride(null);
+    setFogActive(false);
+    setPlannerOpen(false);
+    setWanderSheetOpen(true);
+    setGenerating(false);
+    if (plan.mode === "heat" && preview.shadeEstimate != null) {
+      setHeatEscape({
+        shade: preview.shadeEstimate,
+      });
+      setHeatEscapeOpen(true);
+    } else {
+      setHeatEscapeOpen(false);
+    }
   }, [exploredIds, mode, planMinutes, preferUnexplored, selected, start, startName, totalMinutes, weather]);
 
   const remixWander = useCallback(() => {
@@ -939,7 +938,8 @@ export default function Home() {
         setLocationStatus("idle");
         launch(START.position, "Victoria Square");
       },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60_000 },
+      // A coarse, recent fix is plenty to start a quest route; high accuracy can stall for the full timeout.
+      { enableHighAccuracy: false, timeout: 4000, maximumAge: 300_000 },
     );
   }, [applyPlan, applyStart, preferUnexplored, start, startName]);
 
@@ -979,6 +979,17 @@ export default function Home() {
       }))
       .filter((pin) => !pin.done);
   })();
+
+  const walkQuest = activePlan?.focusPlaceId
+    ? todaysQuests.find((quest) => quest.place.id === activePlan.focusPlaceId) ?? null
+    : null;
+  const walkQuestStopIndex = walkQuest
+    ? displayRoute.stops.findIndex((stop) => stop.id === walkQuest.place.id)
+    : -1;
+  useEffect(() => {
+    if (!walkingActive || !walkQuest || walkQuestStopIndex < 0) return;
+    if (walkStopIndex > walkQuestStopIndex) completeDailyQuest(walkQuest);
+  }, [walkingActive, walkQuest, walkQuestStopIndex, walkStopIndex]);
 
   useEffect(() => {
     if (!questsOpen) return;
@@ -1195,6 +1206,7 @@ export default function Home() {
   function finishWalk() {
     // One award per walk: the walk id is the points event key, so repeats are ignored.
     if (walkId) completeWalk(`walk:${walkId}`, displayRoute.walkingMinutes, walkMemorySaved);
+    if (walkQuest) completeDailyQuest(walkQuest);
     if (walkStartedAtRef.current) {
       recordWalkHistory({
         startedAt: walkStartedAtRef.current,

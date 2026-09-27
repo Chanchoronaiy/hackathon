@@ -102,10 +102,15 @@ export function isQuestCompleted(questId: string, profile = readGamificationProf
     || profile.completedEventIds.includes(`daily:${questId}`);
 }
 
-/** Adopts the server's authoritative total and tells every points listener to refresh. */
+/**
+ * Reconciles with the server total and tells every points listener to refresh.
+ * Never lowers the local total: sync replies can arrive out of order (a walk's reply
+ * after its quest's), and older local points may predate the cloud account.
+ */
 export function applyCloudPoints(cloudPoints: number | null | undefined) {
   if (typeof window === "undefined" || typeof cloudPoints !== "number") return;
-  const synced = { ...readGamificationProfile(), points: cloudPoints };
+  const current = readGamificationProfile();
+  const synced = { ...current, points: Math.max(current.points, cloudPoints) };
   window.localStorage.setItem(PROFILE_KEY, JSON.stringify(synced));
   window.dispatchEvent(new CustomEvent("wander:points", { detail: synced }));
 }

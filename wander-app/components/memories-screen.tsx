@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { Building2, Camera, Circle, Coffee, Landmark, Trees, Trash2, X } from "lucide-react";
+import { Building2, Circle, Coffee, Landmark, Trees, Trash2, X } from "lucide-react";
 import { listWalkMemories, MEMORIES_CHANGED_EVENT } from "@/lib/walk-memories";
 
 type MomentTone = "sage" | "sand" | "blue" | "lavender" | "olive" | "clay";
@@ -180,8 +180,9 @@ export default function MemoriesScreen() {
 
       <p className="memories-stats">22 memories · 11 walks · 27 km</p>
 
+      {highlights.length > 0 ? (
       <div className="memories-highlights" role="list" aria-label="Walk memories">
-        {highlights.length > 0 ? highlights.map((highlight, index) => (
+        {highlights.map((highlight, index) => (
           <button
             key={highlight.id}
             type="button"
@@ -195,13 +196,9 @@ export default function MemoriesScreen() {
             </span>
             <span className="memories-highlight-label">{highlight.label}</span>
           </button>
-        )) : (
-          <div className="memories-highlight is-empty" role="listitem">
-            <span className="memories-highlight-ring"><Camera size={22} strokeWidth={2} aria-hidden="true" /></span>
-            <span className="memories-highlight-label">Capture on a walk</span>
-          </div>
-        )}
+        ))}
       </div>
+      ) : null}
       {photoError ? <output className="memories-photo-error">{photoError}</output> : null}
 
       {viewing ? (
