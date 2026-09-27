@@ -3,11 +3,12 @@
 import { Trophy } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
-  demoFriendsLeaderboard,
   demoGlobalLeaderboard,
   leaderboardBand,
   readGamificationProfile,
 } from "@/lib/gamification";
+import { useFriends } from "@/hooks/use-friends";
+import { isSupabaseConfigured } from "@/lib/supabase";
 import { loadCloudLeaderboard } from "@/lib/cloud-data";
 
 type LeaderboardScreenProps = {
@@ -15,6 +16,7 @@ type LeaderboardScreenProps = {
 };
 
 export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
+  const { snapshot: friends, error: friendsError } = useFriends();
   const [tab, setTab] = useState<"friends" | "global">("friends");
   const [points, setPoints] = useState(() => readGamificationProfile().points);
   const [cloudEntries, setCloudEntries] = useState<Awaited<ReturnType<typeof loadCloudLeaderboard>>>(null);
@@ -27,22 +29,33 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
 
   useEffect(() => {
     let cancelled = false;
-    void loadCloudLeaderboard().then((entries) => {
-      if (!cancelled && entries?.length) setCloudEntries(entries);
-    });
-    return () => { cancelled = true; };
+    const refresh = () => {
+      void loadCloudLeaderboard().then((entries) => {
+        if (!cancelled && entries) setCloudEntries(entries);
+      }).catch(() => undefined);
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("wander:friends", refresh);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("wander:friends", refresh);
+    };
   }, [points]);
 
   const entries = useMemo(() => {
     const cloudYou = cloudEntries?.find((entry) => entry.id === "you");
     const score = typeof cloudYou?.points === "number" ? cloudYou.points : points;
-    if (tab === "friends") return demoFriendsLeaderboard(score);
-    // Keep demo global so friends/global ranks stay consistent; use cloud score for You.
-    if (cloudEntries && cloudEntries.length >= 15) {
+    if (tab === "friends") return friends?.entries ?? [];
+    // Show the real global board even when it has fewer than fifteen users.
+    if (cloudEntries) {
       return cloudEntries;
     }
-    return demoGlobalLeaderboard(score);
-  }, [cloudEntries, points, tab]);
+    return isSupabaseConfigured() ? [] : demoGlobalLeaderboard(score);
+  }, [cloudEntries, friends, points, tab]);
   const yourIndex = entries.findIndex((entry) => entry.id === "you");
   const yourRank = yourIndex + 1;
   const you = yourIndex >= 0 ? entries[yourIndex] : null;
@@ -80,7 +93,7 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
       </header>
 
       <div className="leaderboard-you">
-        <strong>{points.toLocaleString()} pts</strong>
+        <strong>{(you?.points ?? points).toLocaleString()} pts</strong>
         <span>
           You’re #{yourRank || "—"} on {tab === "friends" ? "friends" : "global"}
         </span>
@@ -107,6 +120,7 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
         </button>
       </div>
 
+      {tab === "friends" && friendsError && <p role="alert">{friendsError}</p>}
       <ol className="leaderboard-screen-list">
         {visible.rows.map(({ person, rank }) => (
           <li

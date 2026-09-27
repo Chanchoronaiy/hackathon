@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
-import { Building2, CalendarDays, Camera, Circle, Coffee, Landmark, Trees, Trash2 } from "lucide-react";
+import { Building2, Camera, Circle, Coffee, Landmark, Trees, Trash2 } from "lucide-react";
 
 type MomentTone = "sage" | "sand" | "blue" | "lavender" | "olive" | "clay";
 type MomentIcon = "tree" | "coffee" | "building" | "bridge" | "bench" | "circles" | "lamp";
@@ -192,9 +192,6 @@ export default function MemoriesScreen() {
           <h1 id="memories-screen-title">Memories</h1>
           <p>The moments between destinations.</p>
         </div>
-        <button type="button" className="memories-calendar" aria-label="Open calendar">
-          <CalendarDays size={18} strokeWidth={2.2} />
-        </button>
       </header>
 
       <p className="memories-stats">22 memories · 11 walks · 27 km</p>

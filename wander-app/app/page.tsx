@@ -1317,6 +1317,13 @@ export default function Home() {
           ))}
         </div>
       )}
+      {hasRoute && readyRouteKey === loopKey && !walkingActive && Boolean(route.optionalStops?.length) && (
+        <button type="button" className={`optional-route-toggle${optionalRouteActive ? " is-active" : ""}`}
+          aria-pressed={optionalRouteActive}
+          onClick={() => setOptionalRouteActive((current) => !current)}>
+          {optionalRouteActive ? "✓ Optional route added · tap to remove" : "＋ Optional route · tap here or the grey line to add"}
+        </button>
+      )}
       <WanderMap
         mode={displayMode}
         route={route}
@@ -1792,7 +1799,7 @@ export default function Home() {
           locationStatus={walkLocationStatus}
           historyMoment={walkHistoryMoment}
           onBack={exitWalk}
-          onFinish={finishWalk}
+          onFinish={() => { playWalkStart(); finishWalk(); }}
           onCapture={captureWalkMoment}
           memorySaved={walkMemorySaved}
           routeSaved={currentRouteSaved}

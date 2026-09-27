@@ -62,3 +62,12 @@ pnpm build
 - Optional pedestrian directions: openrouteservice (server-proxied).
 
 Research queries and the original extract are kept in `../research/`. Product scope, source caveats and team ownership are documented in `../docs/WANDER_BUILD_PLAN.md`.
+
+### Friend requests
+
+Apply `supabase/migrations/004_friend_requests.sql` after the existing migrations.
+Friends → Add a friend sends a request to an exact Supabase profile username.
+Only the recipient can accept or decline. Both friends leaderboards use accepted
+friendships and lifetime profile points, with completed-walk counts from the points
+ledger. They refresh after decisions, point awards, window focus, and every 15 seconds.
+Route paths and private saved routes are not shared by accepting a request.

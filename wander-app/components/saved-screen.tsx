@@ -105,7 +105,6 @@ export default function SavedScreen({
     <section className="saved-screen" aria-labelledby="saved-screen-title">
       <header className="saved-screen-header">
         <h1 id="saved-screen-title">Saved</h1>
-        <p>Your Adelaide, collected</p>
       </header>
 
       {note ? <p className="saved-screen-note">{note}</p> : null}

@@ -365,15 +365,18 @@ export default function WanderMap({
               {route.optionalGeometry && route.optionalGeometry.length >= 2 && (
                 <Polyline
                   positions={route.optionalGeometry}
+                  eventHandlers={{ click: () => { if (!walkMode) onSelectOptionalStop?.("optional-route"); } }}
                   pathOptions={{
                     color: optionalRouteActive ? "#8ea66b" : "#4a504a",
                     weight: optionalRouteActive ? 6 : 5,
                     opacity: fogActive ? 0.4 : optionalRouteActive ? 0.95 : 0.88,
-                    dashArray: "10 12",
+                    dashArray: optionalRouteActive ? undefined : "10 12",
                     lineCap: "round",
                     lineJoin: "round",
                   }}
-                />
+                >
+                  {!walkMode && <Tooltip sticky>{optionalRouteActive ? "Optional route added — tap to remove" : "Optional route — tap to add"}</Tooltip>}
+                </Polyline>
               )}
               <Polyline positions={route.geometry} pathOptions={{ color: walkMode ? "#c45a30" : "#0b0e0c", weight: walkMode ? 10 : 12, opacity: fogActive ? .4 : .88, lineCap: "round", lineJoin: "round" }} />
               <Polyline positions={route.geometry} pathOptions={{ color: colour, weight: walkMode ? 6 : 7, opacity: fogActive ? .6 : 1, lineCap: "round", lineJoin: "round" }} />

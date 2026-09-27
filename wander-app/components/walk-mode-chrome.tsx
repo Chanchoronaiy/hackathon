@@ -209,11 +209,10 @@ export default function WalkModeChrome({
         </aside>
       ) : (
         <aside className="walk-next-card walk-next-done">
-          <p className="walk-next-kicker">Nice wander</p>
           <div className="walk-next-row is-done">
             <div className="walk-next-copy">
-              <strong>You’re back near the start</strong>
-              <p>{memorySaved ? "Your memory is saved. End the walk when you\u2019re ready." : "Capture a last moment, or end the walk."}</p>
+              <strong className="walk-done-title">Nice wander</strong>
+              {memorySaved && <p>Your memory is saved. End the walk when you’re ready.</p>}
             </div>
           </div>
           {reviewSubmitted ? (
