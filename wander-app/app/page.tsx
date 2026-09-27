@@ -15,7 +15,7 @@ import StartSearch from "@/components/start-search";
 import StreetViewDialog from "@/components/street-view-dialog";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
-import { dailyQuests, isQuestCompleted, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
+import { dailyQuests, isQuestCompleted, localDateKey, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
 import {
   canRemix,
   consumeRemixTry,
@@ -796,7 +796,16 @@ export default function Home() {
     || hasRoute
     || walkingActive;
 
-  const todaysQuests = useMemo(() => dailyQuests(), []);
+  const [questDateKey, setQuestDateKey] = useState(() => localDateKey());
+  useEffect(() => {
+    const refreshDate = () => setQuestDateKey((current) => {
+      const next = localDateKey();
+      return current === next ? current : next;
+    });
+    const timer = window.setInterval(refreshDate, 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const todaysQuests = useMemo(() => dailyQuests(), [questDateKey]);
   const [hasUnfinishedQuests, setHasUnfinishedQuests] = useState(false);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {

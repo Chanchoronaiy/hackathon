@@ -8,6 +8,7 @@ import StreetViewDialog from "@/components/street-view-dialog";
 import {
   dailyQuests,
   isQuestCompleted,
+  localDateKey,
   readGamificationProfile,
   type DailyQuest,
 } from "@/lib/gamification";
@@ -25,7 +26,8 @@ export default function DailyQuestsScreen({
   onGoToQuest,
   onClose,
 }: DailyQuestsScreenProps) {
-  const quests = useMemo(() => dailyQuests(), []);
+  const [questDateKey, setQuestDateKey] = useState(() => localDateKey());
+  const quests = useMemo(() => dailyQuests(), [questDateKey]);
   const [profile, setProfile] = useState(() => readGamificationProfile());
   const [streetViewQuest, setStreetViewQuest] = useState<DailyQuest | null>(null);
   const [checkinQuest, setCheckinQuest] = useState<DailyQuest | null>(null);
@@ -35,6 +37,15 @@ export default function DailyQuestsScreen({
     const update = () => setProfile(readGamificationProfile());
     window.addEventListener("wander:points", update);
     return () => window.removeEventListener("wander:points", update);
+  }, []);
+
+  useEffect(() => {
+    const refreshDate = () => setQuestDateKey((current) => {
+      const next = localDateKey();
+      return current === next ? current : next;
+    });
+    const timer = window.setInterval(refreshDate, 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   useEffect(() => {

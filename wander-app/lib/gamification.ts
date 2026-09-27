@@ -43,14 +43,33 @@ function hashDate(value: string) {
   return hash;
 }
 
+function seededRandom(seed: number) {
+  let value = seed >>> 0;
+  return () => {
+    value += 0x6D2B79F5;
+    let mixed = value;
+    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleForDate<T>(items: T[], dateKey: string) {
+  const shuffled = [...items];
+  const random = seededRandom(hashDate(dateKey));
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 /** Five deterministic Adelaide quests: identical for all users on the same local date. */
 export function dailyQuests(date = new Date()): DailyQuest[] {
   const dateKey = localDateKey(date);
   const pool = ADELAIDE_PLACES.filter((place) => !["water", "calm"].includes(place.category));
-  const start = hashDate(dateKey) % pool.length;
-  const step = 7;
-  return Array.from({ length: Math.min(5, pool.length) }, (_, index) => {
-    const place = pool[(start + index * step) % pool.length];
+  const selectedPlaces = shuffleForDate(pool, dateKey).slice(0, Math.min(5, pool.length));
+  return selectedPlaces.map((place, index) => {
     return {
       id: `${dateKey}:${place.id}`,
       place,
