@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Camera, Check, CornerUpRight, Images, Shuffle, Star, X } from "lucide-react";
+import { ArrowLeft, Bookmark, Camera, Check, CornerUpRight, Images, Shuffle, Star, X } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import type { HistoryImagePair } from "@/lib/history-sites";
@@ -29,6 +29,9 @@ type WalkModeChromeProps = {
   onAdvance?: () => void;
   /** This walk's one memory is already saved. */
   memorySaved?: boolean;
+  /** This route is already in the saved list. */
+  routeSaved?: boolean;
+  onSaveRoute?: () => void;
 };
 
 function remainingMinutes(route: WanderRoute, currentStopIndex: number) {
@@ -66,6 +69,8 @@ export default function WalkModeChrome({
   onSubmitReview,
   onAdvance,
   memorySaved = false,
+  routeSaved = false,
+  onSaveRoute,
 }: WalkModeChromeProps) {
   const [photoComparisonOpen, setPhotoComparisonOpen] = useState(false);
   const [reviewRating, setReviewRating] = useState(0);
@@ -252,6 +257,7 @@ export default function WalkModeChrome({
               }}
             >
               <strong>How was this walk?</strong>
+              <div className="walk-review-row">
               <fieldset className="walk-review-stars">
                 <legend>Rate this walk</legend>
                 {[1, 2, 3, 4, 5].map((rating) => (
@@ -266,6 +272,16 @@ export default function WalkModeChrome({
                   </button>
                 ))}
               </fieldset>
+              <button
+                type="button"
+                className={`walk-review-save${routeSaved ? " is-saved" : ""}`}
+                aria-label={routeSaved ? "Walk saved to your list, tap to unsave" : "Save this walk"}
+                aria-pressed={routeSaved}
+                onClick={onSaveRoute}
+              >
+                <Bookmark size={20} strokeWidth={2.2} fill={routeSaved ? "currentColor" : "none"} />
+              </button>
+              </div>
               <label className="walk-review-comment">
                 <span>Leave a tip or comment</span>
                 <textarea

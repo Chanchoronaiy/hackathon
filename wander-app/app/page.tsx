@@ -8,6 +8,7 @@ import ExploreScreen, { type ExploreSuggestion } from "@/components/explore-scre
 import FriendsScreen from "@/components/friends-screen";
 import LeaderboardScreen from "@/components/leaderboard-screen";
 import MemoriesScreen from "@/components/memories-screen";
+import ProfileScreen from "@/components/profile-screen";
 import SavedScreen from "@/components/saved-screen";
 import WalkMemoryDialog from "@/components/walk-memory-dialog";
 import WalkModeChrome from "@/components/walk-mode-chrome";
@@ -32,7 +33,7 @@ import {
 import { HISTORY_SITES, type HistoryImagePair } from "@/lib/history-sites";
 import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-planner";
 import { resolveLoopGeometry } from "@/lib/routing";
-import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
+import { deleteSavedTrial, pinnedRouteFor, readSavedTrials, routeKeyFor, saveTrial, writeSavedTrials, type SavedTrial } from "@/lib/saved-trials";
 import { addTrailReview } from "@/lib/trail-reviews";
 import { recordWalkHistory, type WalkCapture } from "@/lib/walk-history";
 import { loadCloudTrials, removeCloudTrial, syncSavedTrial, syncWalkMemory } from "@/lib/cloud-data";
@@ -72,6 +73,11 @@ type Plan = {
   focusDestination?: { name: string; position: LatLng };
   remixSeed?: number;
   excludePlaceIds?: string[];
+  /** Set when this plan was reopened from the saved list. */
+  savedTrialId?: string;
+  /** Reopened saved route: shown exactly as saved instead of being re-planned. */
+  pinnedRoute?: WanderRoute;
+  pinnedOptionalActive?: boolean;
 };
 type LocationStatus = "locating" | "located" | "idle";
 
@@ -109,6 +115,7 @@ function YourWanderSheet({
   onRemix,
   onStartWalk,
   onSave,
+  saved,
   onClose,
   onDropBuddy,
 }: {
@@ -117,6 +124,7 @@ function YourWanderSheet({
   onRemix: () => void;
   onStartWalk: () => void;
   onSave: () => void;
+  saved: boolean;
   onClose: () => void;
   onDropBuddy: (clientX: number, clientY: number) => void;
 }) {
@@ -163,8 +171,14 @@ function YourWanderSheet({
         <button type="button" className="wander-sheet-start" onClick={onStartWalk}>
           Start walk
         </button>
-        <button type="button" className="wander-sheet-save" aria-label="Save this wander" onClick={onSave}>
-          <Bookmark size={20} strokeWidth={2.2} />
+        <button
+          type="button"
+          className={`wander-sheet-save${saved ? " is-saved" : ""}`}
+          aria-label={saved ? "Saved to your list, tap to unsave" : "Save this wander"}
+          aria-pressed={saved}
+          onClick={onSave}
+        >
+          <Bookmark size={20} strokeWidth={2.2} fill={saved ? "currentColor" : "none"} />
         </button>
       </div>
     </aside>
@@ -239,7 +253,10 @@ export default function Home() {
   const [selectedQuestId, setSelectedQuestId] = useState<string | null>(null);
   const [_questPointsTick, setQuestPointsTick] = useState(0);
   const [leaderboardOpen, setLeaderboardOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [savedTrials, setSavedTrials] = useState<SavedTrial[]>([]);
+  // The plan saved from the Your wander sheet or end-of-walk card, so its bookmark stays filled.
+  const [justSaved, setJustSaved] = useState<{ plan: Plan; trialId: string } | null>(null);
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [streetViewPosition, setStreetViewPosition] = useState<LatLng | null>(null);
@@ -285,7 +302,7 @@ export default function Home() {
   );
 
   const planned = useMemo(
-    () => planWanderRoute({
+    () => activePlan?.pinnedRoute ?? planWanderRoute({
       ...(activePlan ?? draftPlan),
       start: start ?? (activePlan ?? draftPlan).start,
       startName: startName ?? (activePlan ?? draftPlan).startName,
@@ -328,9 +345,10 @@ export default function Home() {
     };
   }, [optionalRouteActive, route]);
 
+  const pinnedOptionalActive = Boolean(activePlan?.pinnedRoute && activePlan.pinnedOptionalActive);
   useEffect(() => {
-    setOptionalRouteActive(false);
-  }, [loopKey]);
+    setOptionalRouteActive(pinnedOptionalActive);
+  }, [loopKey, pinnedOptionalActive]);
 
   const hasRoute = activePlan != null;
   const displayMode = activePlan?.mode ?? mode;
@@ -341,9 +359,14 @@ export default function Home() {
     setStart(next.position);
     setStartName(next.label);
     setStartQuery(next.label);
-    setActivePlan((current) => (
-      current ? { ...current, start: next.position, startName: next.label } : current
-    ));
+    setActivePlan((current) => {
+      if (!current) return current;
+      const moved = current.start?.[0] !== next.position[0] || current.start?.[1] !== next.position[1];
+      // A new start means a new loop, so a pinned saved route is re-planned from there.
+      return moved
+        ? { ...current, start: next.position, startName: next.label, pinnedRoute: undefined, savedTrialId: undefined }
+        : { ...current, startName: next.label };
+    });
   }, []);
 
   const clearToVictoriaSquare = useCallback((fromUser = false) => {
@@ -352,7 +375,11 @@ export default function Home() {
     setStartName(undefined);
     setStartQuery("");
     setActivePlan((current) => (
-      current ? { ...current, start: undefined, startName: undefined } : current
+      current
+        ? current.start
+          ? { ...current, start: undefined, startName: undefined, pinnedRoute: undefined, savedTrialId: undefined }
+          : { ...current, startName: undefined }
+        : current
     ));
   }, []);
 
@@ -420,7 +447,7 @@ export default function Home() {
     }
     setGenerating(true);
     const plan = nextPlan ?? { mode, minutes: planMinutes, interests: selected, start, startName, preferUnexplored };
-    const preview = planWanderRoute({
+    const preview = plan.pinnedRoute ?? planWanderRoute({
       ...plan,
       exploredIds,
       preferUnexplored: plan.preferUnexplored ?? preferUnexplored,
@@ -466,8 +493,9 @@ export default function Home() {
     ]
       .map((stop) => stop.id)
       .filter((id) => id !== activePlan.focusPlaceId && !id.startsWith("search:"));
+    const { pinnedRoute: _pinned, pinnedOptionalActive: _optional, savedTrialId: _saved, ...remixFrom } = activePlan;
     applyPlan({
-      ...activePlan,
+      ...remixFrom,
       remixSeed: (activePlan.remixSeed ?? 0) + 1,
       excludePlaceIds,
     });
@@ -679,6 +707,7 @@ export default function Home() {
     setQuestsOpen(false);
     setSelectedQuestId(null);
     setLeaderboardOpen(false);
+    setProfileOpen(false);
   }, []);
 
   /** Drop a planned route that was never started as a walk. */
@@ -688,16 +717,6 @@ export default function Home() {
     setOrsOverride(null);
     setHeatEscapeOpen(false);
   }, []);
-
-  const openSavedScreen = useCallback((note?: string | null) => {
-    setSaveNote(note ?? null);
-    closeOverlayScreens();
-    clearUnusedRoute();
-    setSavedOpen(true);
-    setHomeTab("saved");
-    setPlannerOpen(false);
-    setFogActive(false);
-  }, [clearUnusedRoute, closeOverlayScreens]);
 
   const openExploreScreen = useCallback(() => {
     closeOverlayScreens();
@@ -759,6 +778,15 @@ export default function Home() {
     setWalkingActive(false);
     setHomeTab("map");
   }, [clearUnusedRoute, closeOverlayScreens, questsOpen]);
+
+  const openProfileScreen = useCallback(() => {
+    closeOverlayScreens();
+    clearUnusedRoute();
+    setProfileOpen(true);
+    setPlannerOpen(false);
+    setFogActive(false);
+    setWalkingActive(false);
+  }, [clearUnusedRoute, closeOverlayScreens]);
 
   const openLeaderboardScreen = useCallback(() => {
     closeOverlayScreens();
@@ -950,9 +978,27 @@ export default function Home() {
     });
   }, [applyPlan, closeOverlayScreens, preferUnexplored, start, startName]);
 
+  const currentRouteTrials = useMemo(() => {
+    if (!hasRoute || !activePlan) return [];
+    const trialId = activePlan.savedTrialId ?? (justSaved?.plan === activePlan ? justSaved.trialId : undefined);
+    const key = routeKeyFor({ mode: activePlan.mode, start: activePlan.start, stopNames: displayRoute.stops.map((stop) => stop.name) });
+    return savedTrials.filter((trial) => trial.id === trialId || routeKeyFor(trial) === key);
+  }, [activePlan, displayRoute.stops, hasRoute, justSaved, savedTrials]);
+  const currentRouteSaved = currentRouteTrials.length > 0;
+
+  const removeTrial = useCallback((id: string) => {
+    deleteSavedTrial(id);
+    setSavedTrials((current) => current.filter((trial) => trial.id !== id));
+    void removeCloudTrial(id);
+  }, []);
+
+  // Saves in place (no jump to the Saved screen) so the walk can still be started.
+  // Tapping again on a saved route unsaves it; the route itself stays on screen.
   const handleSaveTrial = useCallback(() => {
-    if (!hasRoute || !activePlan) {
-      openSavedScreen("Generate a wander first, then save it.");
+    if (!hasRoute || !activePlan) return;
+    if (currentRouteSaved) {
+      currentRouteTrials.forEach((trial) => removeTrial(trial.id));
+      setJustSaved(null);
       return;
     }
     const next = saveTrial({
@@ -966,17 +1012,31 @@ export default function Home() {
       walkingMinutes: displayRoute.walkingMinutes,
       distanceKm: displayRoute.distanceKm,
       title: displayRoute.title,
+      preferUnexplored: activePlan.preferUnexplored,
+      focusPlaceId: activePlan.focusPlaceId,
+      focusDestination: activePlan.focusDestination,
+      remixSeed: activePlan.remixSeed,
+      excludePlaceIds: activePlan.excludePlaceIds,
+      route,
+      optionalActive: optionalRouteActive,
     });
     setSavedTrials(next);
     const localTrial = next[0];
     if (localTrial) {
+      setJustSaved({ plan: activePlan, trialId: localTrial.id });
       void syncSavedTrial(localTrial).then((cloudTrial) => {
         if (!cloudTrial) return;
+        // Unsaved before the cloud copy came back: drop the cloud copy too.
+        if (!readSavedTrials().some((trial) => trial.id === localTrial.id)) {
+          void removeCloudTrial(cloudTrial.id);
+          return;
+        }
+        writeSavedTrials(readSavedTrials().map((trial) => (trial.id === localTrial.id ? cloudTrial : trial)));
         setSavedTrials((current) => [cloudTrial, ...current.filter((trial) => trial.id !== localTrial.id)]);
+        setJustSaved((current) => (current?.trialId === localTrial.id ? { ...current, trialId: cloudTrial.id } : current));
       });
     }
-    openSavedScreen(null);
-  }, [activePlan, displayRoute.distanceKm, displayRoute.geometry, displayRoute.stops, displayRoute.title, displayRoute.walkingMinutes, hasRoute, openSavedScreen]);
+  }, [activePlan, currentRouteSaved, currentRouteTrials, removeTrial, optionalRouteActive, route, displayRoute.distanceKm, displayRoute.geometry, displayRoute.stops, displayRoute.title, displayRoute.walkingMinutes, hasRoute]);
 
   const restoreTrial = useCallback((trial: SavedTrial) => {
     const nextMinutes = Math.max(5, Math.min(180, Math.round(trial.minutes)));
@@ -998,6 +1058,14 @@ export default function Home() {
       interests: trial.interests,
       start: trial.start,
       startName: trial.startName,
+      preferUnexplored: trial.preferUnexplored,
+      focusPlaceId: trial.focusPlaceId,
+      focusDestination: trial.focusDestination,
+      remixSeed: trial.remixSeed,
+      excludePlaceIds: trial.excludePlaceIds,
+      savedTrialId: trial.id,
+      pinnedRoute: pinnedRouteFor(trial),
+      pinnedOptionalActive: trial.optionalActive,
     });
     setSavedOpen(false);
     setSaveNote(null);
@@ -1028,9 +1096,9 @@ export default function Home() {
   );
   const fogPercentLabel = friendsFogView ? friendsFogPercent : explorationPercent;
 
-  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen && !leaderboardOpen && !friendsFogView;
+  const showMapChrome = !plannerOpen && !wanderSheetOpen && !walkingActive && !savedOpen && !exploreOpen && !memoriesOpen && !friendsOpen && !leaderboardOpen && !profileOpen && !friendsFogView;
   const showHomeDock = !plannerOpen && !wanderSheetOpen && !walkingActive && !leaderboardOpen && !friendsFogView;
-  const tabScreenOpen = savedOpen || exploreOpen || memoriesOpen || friendsOpen || leaderboardOpen;
+  const tabScreenOpen = savedOpen || exploreOpen || memoriesOpen || friendsOpen || leaderboardOpen || profileOpen;
 
   function toggleFog() {
     if (fogActive) {
@@ -1281,10 +1349,7 @@ export default function Home() {
               type="button"
               className="home-profile"
               aria-label="Open profile"
-              onClick={() => {
-                setQuestsOpen(false);
-                setSelectedQuestId(null);
-              }}
+              onClick={openProfileScreen}
             >
               <span aria-hidden="true">AS</span>
             </button>
@@ -1496,6 +1561,10 @@ export default function Home() {
         />
       )}
 
+      {profileOpen && !fogActive && (
+        <ProfileScreen onClose={() => goHomeTab("map")} />
+      )}
+
       {leaderboardOpen && !fogActive && (
         <LeaderboardScreen onClose={() => setLeaderboardOpen(false)} />
       )}
@@ -1505,11 +1574,7 @@ export default function Home() {
           trials={savedTrials}
           note={saveNote}
           onOpenTrial={restoreTrial}
-          onRemoveTrial={(id) => {
-            deleteSavedTrial(id);
-            setSavedTrials((current) => current.filter((trial) => trial.id !== id));
-            void removeCloudTrial(id);
-          }}
+          onRemoveTrial={removeTrial}
         />
       )}
 
@@ -1625,6 +1690,7 @@ export default function Home() {
             onRemix={remixWander}
             onStartWalk={startWalk}
             onSave={handleSaveTrial}
+            saved={currentRouteSaved}
             onClose={closeWanderSheet}
             onDropBuddy={dropStreetViewBuddy}
           />
@@ -1709,6 +1775,8 @@ export default function Home() {
           onFinish={finishWalk}
           onCapture={captureWalkMoment}
           memorySaved={walkMemorySaved}
+          routeSaved={currentRouteSaved}
+          onSaveRoute={handleSaveTrial}
           onDismissHistoryMoment={dismissWalkHistoryMoment}
           onAnotherFact={showAnotherWalkFact}
           onSubmitReview={(trailId, rating, comment) => addTrailReview({

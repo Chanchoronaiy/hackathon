@@ -1,4 +1,4 @@
-import type { LatLng } from "@/lib/route-planner";
+import type { LatLng, WanderRoute } from "@/lib/route-planner";
 
 const STORAGE_KEY = "wander:saved-trials";
 
@@ -15,7 +15,30 @@ export type SavedTrial = {
   walkingMinutes: number;
   distanceKm: number;
   title?: string;
+  /** Plan details needed to bring back the exact same route (e.g. a remixed one). */
+  preferUnexplored?: boolean;
+  focusPlaceId?: string;
+  focusDestination?: { name: string; position: LatLng };
+  remixSeed?: number;
+  excludePlaceIds?: string[];
+  /** Snapshot of the exact route as saved, so reopening it never re-plans different stops. */
+  route?: WanderRoute;
+  /** Whether the optional scenic stops were switched on when saved. */
+  optionalActive?: boolean;
 };
+
+/** The saved route snapshot, if it is intact (older saves don't have one). */
+export function pinnedRouteFor(trial: SavedTrial): WanderRoute | undefined {
+  const route = trial.route;
+  if (!route || !Array.isArray(route.stops) || !Array.isArray(route.geometry) || !route.start) return undefined;
+  return route;
+}
+
+/** Two routes are the same when mode, start and stops match; used to block duplicate saves. */
+export function routeKeyFor(route: { mode: string; start?: LatLng; stopNames: string[] }) {
+  const start = route.start ? route.start.map((value) => value.toFixed(4)).join(",") : "default-start";
+  return `${route.mode}|${start}|${route.stopNames.join(">")}`;
+}
 
 export function readSavedTrials(): SavedTrial[] {
   if (typeof window === "undefined") return [];
