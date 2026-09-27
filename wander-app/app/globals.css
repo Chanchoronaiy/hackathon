@@ -550,7 +550,7 @@ button,input { font:inherit; } button { cursor:pointer; }
   border-top-right-radius:0;
 }
 .home-search .start-block.has-from .start-suggestions { top:38px; }
-.home-search .start-suggestions.is-from {
+.home-search .start-block.has-from .start-suggestions.is-from {
   top:calc(42px + 8px + 38px);
   border-top-left-radius:0;
   border-top-right-radius:0;
@@ -1400,38 +1400,27 @@ button,input { font:inherit; } button { cursor:pointer; }
 .streetview-card h2 { margin:3px 0 0; font-size:21px; }
 .streetview-card header button,.checkin-close { display:grid; place-items:center; width:36px; height:36px; border:0; border-radius:50%; background:rgba(15,18,15,.08); }
 .streetview-card iframe { display:block; width:100%; height:min(56vh,430px); border:0; }
-.streetview-buddy-marker { background:transparent; border:0; }
-.streetview-buddy-marker span {
-  display:block;
-  position:relative;
-  width:76px;
-  height:86px;
-  cursor:grab;
+.buddy-mascot {
+  position:absolute; z-index:3; bottom:100%;
+  display:block; width:76px; height:86px;
+  cursor:grab; touch-action:none;
+  filter:drop-shadow(0 5px 3px rgb(16 25 18 / .28));
+  user-select:none; -webkit-user-select:none; -webkit-touch-callout:none;
+}
+.wander-sheet > .buddy-mascot { left:10px; margin-bottom:-14px; }
+.home-explore-pill > .buddy-mascot { left:-10px; margin-bottom:-10px; }
+.buddy-mascot.is-dragging { z-index:900; }
+.buddy-mascot img {
+  position:absolute; inset:0; display:block; width:100%; height:100%;
+  object-fit:contain; image-rendering:pixelated; pointer-events:none;
   transform-origin:50% 88%;
   animation:streetview-buddy-bob 1.25s steps(2,end) infinite;
-  filter:drop-shadow(0 5px 3px rgb(16 25 18 / .28));
-  user-select:none;
-  -webkit-user-select:none;
-  -webkit-touch-callout:none;
 }
-.streetview-buddy-marker img {
-  position:absolute;
-  inset:0;
-  display:block;
-  width:100%;
-  height:100%;
-  object-fit:contain;
-  image-rendering:pixelated;
-  pointer-events:none;
-}
-.streetview-buddy-marker .buddy-held { opacity:0; }
-.streetview-buddy-marker.is-held .buddy-idle { opacity:0; }
-.streetview-buddy-marker.is-held .buddy-held { opacity:1; }
-.streetview-buddy-marker.is-held span {
-  cursor:grabbing;
-  animation:streetview-buddy-wiggle .24s steps(2,end) infinite;
-  filter:drop-shadow(0 8px 4px rgb(16 25 18 / .34));
-}
+.buddy-mascot .buddy-held { opacity:0; }
+.buddy-mascot.is-held { cursor:grabbing; filter:drop-shadow(0 8px 4px rgb(16 25 18 / .34)); }
+.buddy-mascot.is-held .buddy-idle { opacity:0; }
+.buddy-mascot.is-held .buddy-held { opacity:1; }
+.buddy-mascot.is-held img { animation:streetview-buddy-wiggle .24s steps(2,end) infinite; }
 @keyframes streetview-buddy-bob {
   0%,100% { transform:translateY(0); }
   50% { transform:translateY(-5px); }
@@ -1441,8 +1430,8 @@ button,input { font:inherit; } button { cursor:pointer; }
   50% { transform:translate(3px,-10px) rotate(5deg); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .streetview-buddy-marker span,
-  .streetview-buddy-marker.is-held span { animation:none; }
+  .buddy-mascot img,
+  .buddy-mascot.is-held img { animation:none; }
 }
 .streetview-empty { display:grid; place-items:center; min-height:300px; padding:36px; text-align:center; background:#e7ecdf; }
 .streetview-empty strong { margin-top:12px; }
@@ -1588,9 +1577,9 @@ button,input { font:inherit; } button { cursor:pointer; }
 .walk-capture {
   position:absolute; z-index:540; right:18px;
   bottom:calc(118px + env(safe-area-inset-bottom,0px));
-  width:68px; min-height:68px; display:grid; justify-items:center; align-content:center; gap:2px;
-  border:0; border-radius:18px; background:var(--rose); color:#fffceb;
-  box-shadow:0 12px 28px rgba(216,162,162,.4); font-size:11px; font-weight:800;
+  width:44px; height:44px; padding:0; display:grid; place-items:center;
+  border:0; border-radius:14px; background:var(--rose); color:#fffceb;
+  box-shadow:0 8px 18px rgba(216,162,162,.4);
 }
 .walk-next-card {
   position:absolute; z-index:540; left:14px; right:14px;

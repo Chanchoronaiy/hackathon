@@ -12,7 +12,9 @@ import SavedScreen from "@/components/saved-screen";
 import WalkModeChrome from "@/components/walk-mode-chrome";
 import MinuteRuler from "@/components/minute-ruler";
 import StartSearch from "@/components/start-search";
+import StreetViewBuddy from "@/components/street-view-buddy";
 import StreetViewDialog from "@/components/street-view-dialog";
+import type { Map as LeafletMap } from "leaflet";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
 import { dailyQuests, isQuestCompleted, localDateKey, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
@@ -92,6 +94,7 @@ function YourWanderSheet({
   onStartWalk,
   onSave,
   onClose,
+  onDropBuddy,
 }: {
   route: WanderRoute;
   remixLeft: number;
@@ -99,11 +102,13 @@ function YourWanderSheet({
   onStartWalk: () => void;
   onSave: () => void;
   onClose: () => void;
+  onDropBuddy: (clientX: number, clientY: number) => void;
 }) {
   const stops = route.stops;
 
   return (
     <aside className="wander-sheet" aria-label="Your wander">
+      <StreetViewBuddy onDrop={onDropBuddy} />
       <span className="wander-sheet-handle" aria-hidden="true" />
       <div className="wander-sheet-top">
         <p className="wander-sheet-kicker">Your wander</p>
@@ -203,6 +208,17 @@ export default function Home() {
   const [saveNote, setSaveNote] = useState<string | null>(null);
   const [plannerOpen, setPlannerOpen] = useState(false);
   const [streetViewPosition, setStreetViewPosition] = useState<LatLng | null>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const handleMapReady = useCallback((map: LeafletMap) => {
+    mapRef.current = map;
+  }, []);
+  const dropStreetViewBuddy = useCallback((clientX: number, clientY: number) => {
+    const map = mapRef.current;
+    if (!map) return;
+    const rect = map.getContainer().getBoundingClientRect();
+    const point = map.containerPointToLatLng([clientX - rect.left, clientY - rect.top]);
+    setStreetViewPosition([point.lat, point.lng]);
+  }, []);
   const [popularPlaces, setPopularPlaces] = useState<PopularPlace[]>([]);
   const [homeTab, setHomeTab] = useState<"map" | "explore" | "memories" | "saved" | "friends">("map");
   const [remixTries, setRemixTries] = useState(() => readRemixTries());
@@ -1062,8 +1078,7 @@ export default function Home() {
         onExploreStop={handleExploreStop}
         onSelectOptionalStop={() => setOptionalRouteActive((current) => !current)}
         onExplorationPercent={setExplorationPercent}
-        onStreetViewPosition={setStreetViewPosition}
-        streetViewOpen={Boolean(streetViewPosition)}
+        onMapReady={handleMapReady}
         popularPlaces={heatMapHidden ? [] : popularPlaces}
       />
       {streetViewPosition && (
@@ -1169,9 +1184,10 @@ export default function Home() {
             </button>
           </aside>
 
-          <div className="home-explore-pill" aria-live="polite">
+          <div className="home-explore-pill">
+            <StreetViewBuddy onDrop={dropStreetViewBuddy} />
             <span className="home-explore-dot" aria-hidden="true" />
-            <span>{explorationPercent.toFixed(0)}% explored</span>
+            <span aria-live="polite">{explorationPercent.toFixed(0)}% explored</span>
           </div>
         </>
       )}
@@ -1415,6 +1431,7 @@ export default function Home() {
             onStartWalk={startWalk}
             onSave={handleSaveTrial}
             onClose={closeWanderSheet}
+            onDropBuddy={dropStreetViewBuddy}
           />
         </>
       )}
