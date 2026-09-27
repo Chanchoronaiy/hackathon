@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { CircleMarker, MapContainer, Marker, Pane, Polyline, Popup, Rectangle, TileLayer, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { POI_DATA_TIMESTAMP } from "@/lib/adelaide-data";
@@ -62,12 +62,12 @@ function questPinIcon(number: number, done: boolean, selected: boolean) {
   });
 }
 
-function streetViewBuddyIcon() {
+function streetViewBuddyIcon(held: boolean) {
   return L.divIcon({
-    className: "streetview-buddy-marker",
-    html: `<span aria-hidden="true">👋</span>`,
-    iconSize: [48, 48],
-    iconAnchor: [24, 42],
+    className: `streetview-buddy-marker${held ? " is-held" : ""}`,
+    html: `<span aria-hidden="true"><img src="/mascot/street-view-buddy-${held ? "held" : "idle"}.png" alt="" draggable="false" /></span>`,
+    iconSize: [76, 86],
+    iconAnchor: [38, 78],
   });
 }
 
@@ -271,6 +271,8 @@ export default function WanderMap({
   const explored = useMemo(() => new Set(exploredIds), [exploredIds]);
   const [clearings, setClearings] = useState<Clearing[]>([]);
   const [streetViewBuddyPosition, setStreetViewBuddyPosition] = useState<LatLng | null>(null);
+  const [streetViewBuddyHeld, setStreetViewBuddyHeld] = useState(false);
+  const streetViewHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exploredPositions = useMemo(() => [
     ...exploredPositionsFor(exploredIds),
     ...exploredTrail.map((position, index) => ({ id: `trail-${index}`, position })),
@@ -297,6 +299,23 @@ export default function WanderMap({
     );
     return walkGeometry[idx] ?? start.position;
   }, [walkMode, walkPosition, walkStopIndex, walkGeometry, walkStops.length, start.position]);
+
+  function clearStreetViewHoldTimer() {
+    if (streetViewHoldTimer.current) clearTimeout(streetViewHoldTimer.current);
+    streetViewHoldTimer.current = null;
+  }
+
+  function prepareStreetViewPickup() {
+    clearStreetViewHoldTimer();
+    streetViewHoldTimer.current = setTimeout(() => setStreetViewBuddyHeld(true), 260);
+  }
+
+  function releaseStreetViewBuddy() {
+    clearStreetViewHoldTimer();
+    setStreetViewBuddyHeld(false);
+  }
+
+  useEffect(() => () => clearStreetViewHoldTimer(), []);
 
   return (
     <>
@@ -338,14 +357,21 @@ export default function WanderMap({
           {showRoute && !walkMode && (
             <Marker
               position={streetViewBuddyPosition ?? start.position}
-              icon={streetViewBuddyIcon()}
+              icon={streetViewBuddyIcon(streetViewBuddyHeld)}
               draggable
               zIndexOffset={700}
               eventHandlers={{
+                mousedown: prepareStreetViewPickup,
+                mouseup: releaseStreetViewBuddy,
+                dragstart: () => {
+                  clearStreetViewHoldTimer();
+                  setStreetViewBuddyHeld(true);
+                },
                 dragend: (event) => {
                   const point = event.target.getLatLng();
                   const next: LatLng = [point.lat, point.lng];
                   setStreetViewBuddyPosition(next);
+                  releaseStreetViewBuddy();
                   onStreetViewPosition?.(next);
                 },
               }}
