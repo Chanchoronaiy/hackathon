@@ -4,7 +4,7 @@ import { Camera, Check, Eye, MapPinned, Sparkles, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import PhotoCheckinDialog from "@/components/photo-checkin-dialog";
-import StreetViewDialog from "@/components/street-view-dialog";
+import StreetViewDialog, { warmStreetView } from "@/components/street-view-dialog";
 import {
   dailyQuests,
   isQuestCompleted,
@@ -57,6 +57,10 @@ export default function DailyQuestsScreen({
   const questPointsToday = doneQuests.reduce((sum, quest) => sum + quest.points, 0);
   const selectedQuest = quests.find((quest) => quest.id === selectedQuestId) ?? null;
   const selectedDone = selectedQuest ? isQuestCompleted(selectedQuest.id, profile) : false;
+
+  useEffect(() => {
+    if (selectedQuest && !selectedDone) warmStreetView(selectedQuest.place.position);
+  }, [selectedQuest, selectedDone]);
 
   const slideSummary = (
     <div className="quests-slide-summary" aria-live="polite">

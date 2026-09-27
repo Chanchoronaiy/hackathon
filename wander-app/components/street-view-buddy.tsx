@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { warmStreetView } from "@/components/street-view-dialog";
 
 const DRAG_THRESHOLD_PX = 8;
 
@@ -33,6 +34,7 @@ export default function StreetViewBuddy({
         event.currentTarget.setPointerCapture(event.pointerId);
         origin.current = { x: event.clientX, y: event.clientY };
         setHeld(true);
+        warmStreetView();
       }}
       onPointerMove={(event) => {
         if (!origin.current) return;
