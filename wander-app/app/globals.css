@@ -492,7 +492,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 /* —— Home map chrome (Start wandering entry) —— */
 .home-top {
   position:absolute; z-index:560; inset:0 0 auto; display:flex; align-items:flex-start; gap:10px;
-  padding:calc(env(safe-area-inset-top, 0px) + 54px) 18px 0; pointer-events:none;
+  padding:calc(env(safe-area-inset-top, 0px) + 14px) 18px 0; pointer-events:none;
 }
 .home-profile {
   pointer-events:auto; flex:0 0 auto; width:42px; height:42px; display:grid; place-items:center;
@@ -558,12 +558,12 @@ button,input { font:inherit; } button { cursor:pointer; }
 
 .home-rail {
   position:absolute; z-index:520;
-  top:calc(env(safe-area-inset-top, 0px) + 108px); right:18px;
+  top:calc(env(safe-area-inset-top, 0px) + 68px); right:18px;
   display:grid; gap:10px; pointer-events:none;
   transition:top .2s ease;
 }
 .app-shell:has(.start-block.has-from) .home-rail {
-  top:calc(env(safe-area-inset-top, 0px) + 158px);
+  top:calc(env(safe-area-inset-top, 0px) + 118px);
 }
 .home-rail-quests {
   position:relative;
@@ -742,11 +742,11 @@ button,input { font:inherit; } button { cursor:pointer; }
 }
 
 @media (max-width:720px) {
-  .home-top { padding:calc(env(safe-area-inset-top, 0px) + 54px) 14px 0; }
+  .home-top { padding:calc(env(safe-area-inset-top, 0px) + 14px) 14px 0; }
   .home-profile { width:38px; height:38px; font-size:11px; }
   .home-search .start-field,
   .home-search .start-field.is-from { height:38px; min-height:38px; border-radius:12px; }
-  .home-rail { top:calc(env(safe-area-inset-top, 0px) + 102px); right:14px; }
+  .home-rail { top:calc(env(safe-area-inset-top, 0px) + 62px); right:14px; }
   .home-explore-pill { left:14px; bottom:calc(8px + env(safe-area-inset-bottom,0px) + 140px); }
   .home-rail-chip { min-width:48px; padding:8px 6px; font-size:10px; border-radius:12px; }
   .home-dock { padding:0 14px calc(8px + env(safe-area-inset-bottom,0px)); gap:8px; }
@@ -767,7 +767,7 @@ button,input { font:inherit; } button { cursor:pointer; }
 /* Your Wander sheet (post-generate) */
 .wander-back {
   position:absolute; z-index:530; left:18px;
-  top:calc(env(safe-area-inset-top, 0px) + 54px);
+  top:calc(env(safe-area-inset-top, 0px) + 14px);
   width:42px; height:42px; display:grid; place-items:center;
   border:0; border-radius:50%; background:rgba(255,252,235,.96); color:var(--ink);
   box-shadow:0 8px 20px rgba(0,0,0,.14); cursor:pointer;
