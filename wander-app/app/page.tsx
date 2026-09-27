@@ -32,6 +32,7 @@ import { planWanderRoute, type LatLng, type WanderRoute } from "@/lib/route-plan
 import { resolveLoopGeometry } from "@/lib/routing";
 import { deleteSavedTrial, readSavedTrials, saveTrial, type SavedTrial } from "@/lib/saved-trials";
 import { loadCloudTrials, removeCloudTrial, syncSavedTrial } from "@/lib/cloud-data";
+import { playClick, playPartyHorn, playWalkStart } from "@/lib/sound";
 import { fetchAdelaideWeather, type WeatherSnapshot } from "@/lib/weather";
 import type { PopularPlace } from "@/lib/popularity";
 
@@ -190,6 +191,9 @@ export default function Home() {
   const [generating, setGenerating] = useState(false);
   const [plannerNotice, setPlannerNotice] = useState<string | null>(null);
   const [celebratingFinish, setCelebratingFinish] = useState(false);
+  useEffect(() => {
+    if (celebratingFinish) playPartyHorn();
+  }, [celebratingFinish]);
   const [wanderSheetOpen, setWanderSheetOpen] = useState(false);
   const [walkingActive, setWalkingActive] = useState(false);
   const [walkStopIndex, setWalkStopIndex] = useState(0);
@@ -1212,7 +1216,14 @@ export default function Home() {
       {showHomeDock && (
         <div className={`home-dock${tabScreenOpen ? " is-saved" : ""}`}>
           {!tabScreenOpen && !questsOpen && (
-            <button className={`start-wander${displayMode === "heat" ? " is-heat" : ""}`} type="button" onClick={openPlanner}>
+            <button
+              className={`start-wander${displayMode === "heat" ? " is-heat" : ""}`}
+              type="button"
+              onClick={() => {
+                playClick();
+                openPlanner();
+              }}
+            >
               <span>Start wandering</span>
             </button>
           )}
@@ -1293,7 +1304,10 @@ export default function Home() {
         <DailyQuestsScreen
           selectedQuestId={selectedQuestId}
           onSelectQuest={setSelectedQuestId}
-          onGoToQuest={goToDailyQuest}
+          onGoToQuest={(quest) => {
+            playClick();
+            goToDailyQuest(quest);
+          }}
           onClose={() => {
             setQuestsOpen(false);
             setSelectedQuestId(null);
@@ -1409,7 +1423,10 @@ export default function Home() {
                 </div>
 
                 {plannerNotice && <p className="planner-notice" role="alert">{plannerNotice}</p>}
-                <button className={`generate${mode === "heat" ? " is-heat" : ""}`} type="button" disabled={generating || totalMinutes < 1} onClick={() => applyPlan()}>
+                <button className={`generate${mode === "heat" ? " is-heat" : ""}`} type="button" disabled={generating || totalMinutes < 1} onClick={() => {
+                  playClick();
+                  applyPlan();
+                }}>
                   <span>{generating ? "Drawing loop…" : "Generate my Wander"}</span>
                   <span aria-hidden="true">{generating ? "…" : "→"}</span>
                 </button>
@@ -1428,7 +1445,10 @@ export default function Home() {
             route={displayRoute}
             remixLeft={remixLeft}
             onRemix={remixWander}
-            onStartWalk={startWalk}
+            onStartWalk={() => {
+              playWalkStart();
+              startWalk();
+            }}
             onSave={handleSaveTrial}
             onClose={closeWanderSheet}
             onDropBuddy={dropStreetViewBuddy}

@@ -1716,6 +1716,7 @@ button,input { font:inherit; } button { cursor:pointer; }
   min-height:42px; width:100%; min-width:0;
   border-radius:14px; font-size:13px;
   display:inline-flex; align-items:center; justify-content:center;
+  white-space:nowrap;
 }
 .quest-detail-done {
   display:inline-flex; align-items:center; justify-content:center; gap:8px;
@@ -1833,13 +1834,13 @@ button,input { font:inherit; } button { cursor:pointer; }
   outline:2px solid var(--sage);
 }
 .leaderboard-screen-list li.band-1 {
-  background:rgba(142,166,107,.32);
+  background:rgba(96,156,222,.3);
 }
 .leaderboard-screen-list li.band-2 {
-  background:rgba(155,184,122,.28);
+  background:rgba(242,140,40,.28);
 }
 .leaderboard-screen-list li.band-3 {
-  background:rgba(110,168,210,.22);
+  background:rgba(255,208,64,.32);
 }
 .leaderboard-screen-list li.band-rest {
   background:rgba(22,25,21,.06);

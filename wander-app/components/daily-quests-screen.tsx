@@ -113,6 +113,7 @@ export default function DailyQuestsScreen({
                 aria-label={`Preview ${selectedQuest.place.name} in Street View`}
               >
                 <Eye size={16} aria-hidden="true" />
+                Street view
               </button>
               <button type="button" className="quests-claim" onClick={() => setCheckinQuest(selectedQuest)}>
                 <Camera size={15} aria-hidden="true" /> Check in

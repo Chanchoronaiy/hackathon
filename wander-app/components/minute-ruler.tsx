@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { startRulerScrollSound, stopRulerScrollSound } from "@/lib/sound";
 
 const MIN_MINUTES = 0;
 const MAX_MINUTES = 59;
@@ -22,6 +23,7 @@ export default function MinuteRuler({ value, onChange }: MinuteRulerProps) {
   const draggingRef = useRef(false);
   const dragOriginRef = useRef({ x: 0, scroll: 0 });
   const settleRef = useRef<number | null>(null);
+  const soundStopRef = useRef<number | null>(null);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
 
@@ -68,6 +70,9 @@ export default function MinuteRuler({ value, onChange }: MinuteRulerProps) {
 
     function handleScroll() {
       if (ignoreScrollRef.current) return;
+      startRulerScrollSound();
+      if (soundStopRef.current != null) window.clearTimeout(soundStopRef.current);
+      soundStopRef.current = window.setTimeout(stopRulerScrollSound, 120);
       const next = minutesFromScroll();
       if (next !== valueRef.current) onChangeRef.current(next);
       if (settleRef.current != null) window.clearTimeout(settleRef.current);
@@ -108,6 +113,8 @@ export default function MinuteRuler({ value, onChange }: MinuteRulerProps) {
       scroller.removeEventListener("pointerup", onPointerUp);
       scroller.removeEventListener("pointercancel", onPointerUp);
       if (settleRef.current != null) window.clearTimeout(settleRef.current);
+      if (soundStopRef.current != null) window.clearTimeout(soundStopRef.current);
+      stopRulerScrollSound();
     };
   }, []);
 
