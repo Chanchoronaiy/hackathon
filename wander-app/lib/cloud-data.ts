@@ -86,6 +86,17 @@ export async function syncPointsEvent(
   return error || typeof data !== 'number' ? null : data;
 }
 
+export async function syncCompletedWalk(eventKey: string, minutes: number) {
+  const supabase = getSupabase();
+  const user = await ensureSupabaseUser();
+  if (!supabase || !user) return null;
+  const { data, error } = await supabase.rpc('complete_wander_walk', {
+    p_event_key: eventKey,
+    p_minutes: Math.max(1, Math.min(180, Math.round(minutes))),
+  });
+  return error || typeof data !== 'number' ? null : data;
+}
+
 export async function submitCloudCheckin({
   eventKey,
   placeId,
@@ -143,6 +154,7 @@ export async function loadCloudLeaderboard(): Promise<
   const { data, error } = await supabase
     .from('global_leaderboard')
     .select('id,username,total_points')
+    .order('total_points', { ascending: false })
     .limit(50);
   if (error) return null;
   return (data ?? []).map(

@@ -35,7 +35,7 @@ Optional walking geometry: copy `.env.example` to `.env.local` and set `OPENROUT
 Wander continues to work from local browser storage when Supabase is not configured. To turn on shared profiles, saved routes, check-in photos, points and the global leaderboard:
 
 1. Create a Supabase project and enable **Anonymous Sign-Ins** under Authentication → Providers.
-2. Run `supabase/migrations/001_wander.sql` in the Supabase SQL editor.
+2. Run the SQL files in `supabase/migrations` in number order in the Supabase SQL editor.
 3. Copy the project URL and publishable/anon key into `.env.local`:
 
 ```bash

@@ -23,6 +23,7 @@ export type LeaderboardEntry = {
 };
 
 const EMPTY_PROFILE: GamificationProfile = { points: 0, completedEventIds: [] };
+export const WALK_POINTS_PER_MINUTE = 10;
 
 const QUEST_BONUSES = [220, 250, 280, 300, 340];
 
@@ -126,6 +127,31 @@ export function awardPoints(eventId: string, points: number, syncCloud = true): 
 
 export function completeDailyQuest(quest: DailyQuest): GamificationProfile {
   return awardPoints(quest.id, quest.points);
+}
+
+export function walkPointsForMinutes(minutes: number) {
+  const completedMinutes = Math.max(1, Math.min(180, Math.round(minutes)));
+  return completedMinutes * WALK_POINTS_PER_MINUTE;
+}
+
+/** Awards a completed walk once locally, then reconciles the total with Supabase. */
+export function completeWalk(eventId: string, minutes: number): GamificationProfile {
+  const completedMinutes = Math.max(1, Math.min(180, Math.round(minutes)));
+  const next = awardPoints(eventId, walkPointsForMinutes(completedMinutes), false);
+
+  if (typeof window !== "undefined") {
+    void import("@/lib/cloud-data")
+      .then(({ syncCompletedWalk }) => syncCompletedWalk(eventId, completedMinutes))
+      .then((cloudPoints) => {
+        if (typeof cloudPoints !== "number") return;
+        const synced = { ...readGamificationProfile(), points: cloudPoints };
+        window.localStorage.setItem(PROFILE_KEY, JSON.stringify(synced));
+        window.dispatchEvent(new CustomEvent("wander:points", { detail: synced }));
+      })
+      .catch(() => undefined);
+  }
+
+  return next;
 }
 
 type DemoPerson = {
