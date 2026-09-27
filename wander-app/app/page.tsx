@@ -18,7 +18,7 @@ import StreetViewDialog from "@/components/street-view-dialog";
 import type { Map as LeafletMap } from "leaflet";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
-import { dailyQuests, isQuestCompleted, localDateKey, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
+import { completeWalk, dailyQuests, isQuestCompleted, localDateKey, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
 import {
   canRemix,
   consumeRemixTry,
@@ -1096,6 +1096,8 @@ export default function Home() {
   }
 
   function finishWalk() {
+    // One award per walk: the walk id is the points event key, so repeats are ignored.
+    if (walkId) completeWalk(`walk:${walkId}`, displayRoute.walkingMinutes, walkMemorySaved);
     if (walkStartedAtRef.current) {
       recordWalkHistory({
         startedAt: walkStartedAtRef.current,

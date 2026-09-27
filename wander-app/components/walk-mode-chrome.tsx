@@ -2,8 +2,7 @@
 
 import { ArrowLeft, Camera, Check, CornerUpRight, Images, Shuffle, Star, X } from "lucide-react";
 import Image from "next/image";
-import { useRef, useState } from "react";
-import { completeWalk } from "@/lib/gamification";
+import { useState } from "react";
 import type { HistoryImagePair } from "@/lib/history-sites";
 import type { WanderRoute } from "@/lib/route-planner";
 
@@ -81,13 +80,6 @@ export default function WalkModeChrome({
   const minsLeft = remainingMinutes(route, currentStopIndex);
   const kmLeft = remainingKm(route, currentStopIndex);
   const progress = walkPercent(route, currentStopIndex);
-  const completionEventRef = useRef<string | null>(null);
-
-  function finishAndAwardPoints() {
-    completionEventRef.current ??= `walk:${crypto.randomUUID()}`;
-    completeWalk(completionEventRef.current, route.walkingMinutes);
-    onFinish();
-  }
 
   return (
     <>
@@ -222,7 +214,7 @@ export default function WalkModeChrome({
           {reviewSubmitted ? (
             <output className="walk-review-thanks">
               <strong>Thanks for helping other walkers.</strong>
-              <button type="button" className="walk-done-end" onClick={finishAndAwardPoints}>
+              <button type="button" className="walk-done-end" onClick={onFinish}>
                 <Check size={18} strokeWidth={2.4} aria-hidden="true" /> End walk
               </button>
             </output>
@@ -237,7 +229,7 @@ export default function WalkModeChrome({
                   <Camera size={18} strokeWidth={2.2} aria-hidden="true" /> Capture
                 </button>
               )}
-              <button type="button" className="walk-done-end" onClick={finishAndAwardPoints}>
+              <button type="button" className="walk-done-end" onClick={onFinish}>
                 <Check size={18} strokeWidth={2.4} aria-hidden="true" /> End walk
               </button>
             </div>
