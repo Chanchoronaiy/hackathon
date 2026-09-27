@@ -524,8 +524,9 @@ button,input { font:inherit; } button { cursor:pointer; }
 .home-search .start-field svg {
   display:block; flex:0 0 auto; width:16px; height:16px; transform:translateY(1px);
 }
+/* 16px minimum: iOS Safari zooms the whole page when focusing smaller inputs. */
 .home-search .start-field input {
-  flex:1 1 auto; min-width:0; font-size:14px; font-weight:650; letter-spacing:-.01em; line-height:1;
+  flex:1 1 auto; min-width:0; font-size:16px; font-weight:650; letter-spacing:-.01em; line-height:1;
 }
 .home-search .start-field input::placeholder { color:#8a9086; font-weight:650; }
 .home-search .start-locate,

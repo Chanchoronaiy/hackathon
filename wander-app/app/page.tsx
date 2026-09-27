@@ -459,8 +459,8 @@ export default function Home() {
         if (cancelled || startTouchedRef.current) return;
         const next: LatLng = [position.coords.latitude, position.coords.longitude];
         setLocationStatus("located");
+        // "From" stays on its placeholder; the start is used silently until the user picks one.
         applyStart({ label: "Your location", position: next });
-        setFromQuery("Your location");
       },
       () => {
         if (!cancelled) setLocationStatus("idle");
