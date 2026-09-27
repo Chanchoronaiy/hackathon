@@ -53,7 +53,3 @@ Wander is a mobile app that curates routes for users through multiple places usi
 - Place records: curated OpenStreetMap data.
 - Weather: [Open-Meteo](https://open-meteo.com/).
 - Pedestrian directions: [openrouteservice](https://openrouteservice.org/).
-
-## Project structure
-
-`wander-app/` contains the app. Its own [README](wander-app/README.md) has deeper setup and data notes. Supabase SQL lives in `wander-app/supabase/migrations/`.
