@@ -17,7 +17,7 @@ export const START: AdelaidePlace = {
   name: "Victoria Square / Tarntanyangga",
   category: "green",
   position: [-34.92852, 138.60075],
-  reason: "Your start and finish",
+  reason: "Your start",
   surprise: 0,
   comfort: 2,
 };

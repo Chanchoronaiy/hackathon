@@ -3,7 +3,7 @@
 import { Camera, CheckCircle2, MapPin, X } from "lucide-react";
 import { useState } from "react";
 import { distanceMetres } from "@/lib/exploration";
-import { awardPoints } from "@/lib/gamification";
+import { applyCloudPoints, awardPoints } from "@/lib/gamification";
 import { submitCloudCheckin } from "@/lib/cloud-data";
 import type { LatLng } from "@/lib/route-planner";
 import CameraCapture from "@/components/camera-capture";
@@ -51,7 +51,7 @@ export default function PhotoCheckinDialog({
           currentPosition: current,
           points,
           photo,
-        }).catch(() => undefined);
+        }).then(applyCloudPoints).catch(() => undefined);
       },
       () => setStatus("location-error"),
       { enableHighAccuracy: true, timeout: 15_000, maximumAge: 15_000 },

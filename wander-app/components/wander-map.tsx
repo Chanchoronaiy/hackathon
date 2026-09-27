@@ -384,7 +384,7 @@ export default function WanderMap({
                 <>
                   {walkStops.length >= 3 && (
                     <Polyline
-                      positions={[...walkStops.map((stop) => stop.position), walkStops[0].position]}
+                      positions={walkStops.map((stop) => stop.position)}
                       pathOptions={{ color: "#8a8f88", weight: 2, opacity: 0.55, dashArray: "6 8", lineCap: "round", lineJoin: "round" }}
                     />
                   )}

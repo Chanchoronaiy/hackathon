@@ -10,6 +10,8 @@ type WalkModeChromeProps = {
   route: WanderRoute;
   reviewTrailId: string;
   currentStopIndex: number;
+  /** 0–1 distance walked along the route line; falls back to stops reached when absent. */
+  progress?: number | null;
   locationStatus: "locating" | "located" | "unavailable";
   historyMoment: {
     siteName: string;
@@ -34,31 +36,19 @@ type WalkModeChromeProps = {
   onSaveRoute?: () => void;
 };
 
-function remainingMinutes(route: WanderRoute, currentStopIndex: number) {
-  const total = Math.max(1, route.stops.length);
-  const progress = Math.min(1, currentStopIndex / total);
-  return Math.max(0, Math.round(route.walkingMinutes * (1 - progress)));
-}
-
-function remainingKm(route: WanderRoute, currentStopIndex: number) {
-  const total = Math.max(1, route.stops.length);
-  const progress = Math.min(1, currentStopIndex / total);
-  return Math.max(0, route.distanceKm * (1 - progress));
+function stopProgress(route: WanderRoute, currentStopIndex: number) {
+  return Math.min(1, currentStopIndex / Math.max(1, route.stops.length));
 }
 
 function etaToNext(route: WanderRoute) {
   return Math.max(1, Math.round(route.walkingMinutes / Math.max(route.stops.length, 1)));
 }
 
-function walkPercent(route: WanderRoute, currentStopIndex: number) {
-  const total = Math.max(1, route.stops.length);
-  return Math.min(100, Math.round((currentStopIndex / total) * 100));
-}
-
 export default function WalkModeChrome({
   route,
   reviewTrailId,
   currentStopIndex,
+  progress: progressFraction,
   locationStatus,
   historyMoment,
   onBack,
@@ -82,9 +72,10 @@ export default function WalkModeChrome({
   const done = totalStops === 0 || currentStopIndex >= totalStops;
   const nextStop = done ? null : route.stops[currentStopIndex];
   const nextNumber = currentStopIndex + 1;
-  const minsLeft = remainingMinutes(route, currentStopIndex);
-  const kmLeft = remainingKm(route, currentStopIndex);
-  const progress = walkPercent(route, currentStopIndex);
+  const fraction = progressFraction ?? stopProgress(route, currentStopIndex);
+  const minsLeft = Math.max(0, Math.round(route.walkingMinutes * (1 - fraction)));
+  const kmLeft = Math.max(0, route.distanceKm * (1 - fraction));
+  const progress = Math.min(100, Math.round(fraction * 100));
 
   return (
     <>

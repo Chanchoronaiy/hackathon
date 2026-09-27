@@ -16,7 +16,7 @@ type LeaderboardScreenProps = {
 };
 
 export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
-  const { snapshot: friends, error: friendsError } = useFriends();
+  const { entries: friendEntries } = useFriends();
   const [tab, setTab] = useState<"friends" | "global">("friends");
   const [points, setPoints] = useState(() => readGamificationProfile().points);
   const [cloudEntries, setCloudEntries] = useState<Awaited<ReturnType<typeof loadCloudLeaderboard>>>(null);
@@ -47,15 +47,20 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
   }, [points]);
 
   const entries = useMemo(() => {
+    if (tab === "friends") return friendEntries;
     const cloudYou = cloudEntries?.find((entry) => entry.id === "you");
-    const score = typeof cloudYou?.points === "number" ? cloudYou.points : points;
-    if (tab === "friends") return friends?.entries ?? [];
-    // Show the real global board even when it has fewer than fifteen users.
-    if (cloudEntries) {
-      return cloudEntries;
-    }
-    return isSupabaseConfigured() ? [] : demoGlobalLeaderboard(score);
-  }, [cloudEntries, friends, points, tab]);
+    // Local points land instantly; the cloud total can lag or miss events, so trust the higher one.
+    const score = Math.max(cloudYou?.points ?? 0, points);
+    const demo = demoGlobalLeaderboard(score);
+    if (!cloudEntries) return isSupabaseConfigured() ? [] : demo;
+    const real = cloudEntries.map((entry) => (entry.id === "you" ? { ...entry, points: score } : entry));
+    if (!cloudYou) real.push(demo.find((entry) => entry.id === "you")!);
+    const realIds = new Set(real.map((entry) => entry.id));
+    const filler = real.length >= 15 ? [] : demo.filter((entry) => !realIds.has(entry.id));
+    return [...real, ...filler].sort(
+      (a, b) => b.points - a.points || (a.id === "you" ? -1 : b.id === "you" ? 1 : 0),
+    );
+  }, [cloudEntries, friendEntries, points, tab]);
   const yourIndex = entries.findIndex((entry) => entry.id === "you");
   const yourRank = yourIndex + 1;
   const you = yourIndex >= 0 ? entries[yourIndex] : null;
@@ -120,7 +125,6 @@ export default function LeaderboardScreen({ onClose }: LeaderboardScreenProps) {
         </button>
       </div>
 
-      {tab === "friends" && friendsError && <p role="alert">{friendsError}</p>}
       <ol className="leaderboard-screen-list">
         {visible.rows.map(({ person, rank }) => (
           <li

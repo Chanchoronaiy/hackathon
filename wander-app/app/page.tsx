@@ -20,6 +20,7 @@ import StreetViewDialog from "@/components/street-view-dialog";
 import type { Map as LeafletMap } from "leaflet";
 import { START, type PlaceCategory } from "@/lib/adelaide-data";
 import { distanceMetres, markExplored, readExploredIds, readExploredTrail, recordExploredPosition } from "@/lib/exploration";
+import { measureRoute, projectAlong, stopAlongs } from "@/lib/walk-progress";
 import { completeWalk, dailyQuests, isQuestCompleted, localDateKey, readGamificationProfile, type DailyQuest } from "@/lib/gamification";
 import {
   canRemix,
@@ -237,6 +238,7 @@ export default function Home() {
   const [walkHistoryMoment, setWalkHistoryMoment] = useState<WalkHistoryMoment | null>(null);
   const [walkStopIndex, setWalkStopIndex] = useState(0);
   const [walkPosition, setWalkPosition] = useState<LatLng | null>(null);
+  const [walkGpsAlong, setWalkGpsAlong] = useState(0);
   // Each walk gets a unique id; its one memory (photo) records that id. Restarting the
   // same generated plan before finishing it resumes the same walk. (Not loopKey: that
   // changes as stops are explored, even though it's the same route.)
@@ -349,6 +351,22 @@ export default function Home() {
       geometry: route.optionalGeometry?.length ? route.optionalGeometry : route.geometry,
     };
   }, [optionalRouteActive, route]);
+
+  const walkMeasure = useMemo(() => measureRoute(displayRoute.geometry), [displayRoute.geometry]);
+  const walkMeasureRef = useRef(walkMeasure);
+  useEffect(() => {
+    walkMeasureRef.current = walkMeasure;
+  }, [walkMeasure]);
+  const walkStopAlongs = useMemo(
+    () => stopAlongs(walkMeasure, displayRoute.stops.map((stop) => stop.position)),
+    [walkMeasure, displayRoute.stops],
+  );
+  const walkProgress = useMemo(() => {
+    if (walkMeasure.total <= 0) return null;
+    if (walkStopIndex >= displayRoute.stops.length) return 1;
+    const reachedAlong = walkStopIndex > 0 ? walkStopAlongs[walkStopIndex - 1] ?? 0 : 0;
+    return Math.min(1, Math.max(reachedAlong, walkGpsAlong) / walkMeasure.total);
+  }, [walkMeasure.total, walkStopIndex, displayRoute.stops.length, walkStopAlongs, walkGpsAlong]);
 
   const pinnedOptionalActive = Boolean(activePlan?.pinnedRoute && activePlan.pinnedOptionalActive);
   useEffect(() => {
@@ -554,6 +572,7 @@ export default function Home() {
         const next: LatLng = [position.coords.latitude, position.coords.longitude];
         setWalkLocationStatus("located");
         setWalkPosition(next);
+        setWalkGpsAlong((current) => projectAlong(walkMeasureRef.current, next, current) ?? current);
         setExploredTrail(recordExploredPosition(next));
 
         const nearbyHistorySite = HISTORY_SITES.find((site) => (
@@ -616,17 +635,19 @@ export default function Home() {
     return () => controller.abort();
   }, [start]);
 
+  const plannedRef = useRef(planned);
+  useEffect(() => {
+    plannedRef.current = planned;
+  }, [planned]);
+
+  // Keyed on route content: `planned` is rebuilt with identical stops whenever a stop is explored.
   useEffect(() => {
     if (!hasRoute) return;
+    const planned = plannedRef.current;
     const primaryWaypoints: LatLng[] = [
       planned.start.position,
       ...planned.stops.map((stop) => stop.position),
     ];
-    // Direct quest/destination paths are start → destination (not a closed loop).
-    const isDirect = Boolean(activePlan?.focusPlaceId || activePlan?.focusDestination);
-    if (!isDirect) {
-      primaryWaypoints.push(planned.start.position);
-    }
 
     const optionalStops = planned.optionalStops ?? [];
     const optionalWaypoints: LatLng[] | null = optionalStops.length > 0
@@ -634,7 +655,6 @@ export default function Home() {
           planned.start.position,
           ...optionalStops.map((stop) => stop.position),
           ...(planned.stops[0] ? [planned.stops[0].position] : []),
-          planned.start.position,
         ]
       : null;
 
@@ -661,7 +681,7 @@ export default function Home() {
       setReadyRouteKey(loopKey);
     });
     return () => { cancelled = true; };
-  }, [hasRoute, loopKey, planned.start.position, planned.stops, planned.optionalStops, planned.geometry, planned.optionalGeometry, activePlan?.focusPlaceId, activePlan?.focusDestination]);
+  }, [hasRoute, loopKey, activePlan?.focusPlaceId, activePlan?.focusDestination]);
 
   useEffect(() => {
     if (!plannerOpen) return;
@@ -950,12 +970,14 @@ export default function Home() {
   }, [todaysQuests, questsOpen, _questPointsTick]);
   const questPins = !questsOpen ? [] : (() => {
     const profile = readGamificationProfile();
-    return todaysQuests.map((quest, index) => ({
-      id: quest.id,
-      position: quest.place.position,
-      number: index + 1,
-      done: isQuestCompleted(quest.id, profile),
-    }));
+    return todaysQuests
+      .map((quest, index) => ({
+        id: quest.id,
+        position: quest.place.position,
+        number: index + 1,
+        done: isQuestCompleted(quest.id, profile),
+      }))
+      .filter((pin) => !pin.done);
   })();
 
   useEffect(() => {
@@ -1154,6 +1176,7 @@ export default function Home() {
     }
     setWalkStopIndex(0);
     setWalkPosition(null);
+    setWalkGpsAlong(0);
     setFogActive(false);
     closeOverlayScreens();
     setPlannerOpen(false);
@@ -1165,6 +1188,7 @@ export default function Home() {
     setWalkHistoryMoment(null);
     setWalkStopIndex(0);
     setWalkPosition(null);
+    setWalkGpsAlong(0);
     setWanderSheetOpen(true);
   }
 
@@ -1192,6 +1216,7 @@ export default function Home() {
     setWalkPlan(null);
     setWalkStopIndex(0);
     setWalkPosition(null);
+    setWalkGpsAlong(0);
     clearUnusedRoute();
     setCelebratingFinish(true);
     window.setTimeout(() => setCelebratingFinish(false), 1800);
@@ -1414,16 +1439,6 @@ export default function Home() {
           <aside className="home-rail" aria-label="Map controls">
             <button
               type="button"
-              className={`home-rail-chip${historyLayer ? " is-on" : ""}`}
-              aria-pressed={historyLayer}
-              aria-label={historyLayer ? "Turn history layer off" : "Turn history layer on"}
-              onClick={() => setHistoryLayer((current) => !current)}
-            >
-              <BookOpen size={18} strokeWidth={2.2} />
-              <span>History</span>
-            </button>
-            <button
-              type="button"
               className={`home-rail-chip${fogActive ? " is-on" : ""}`}
               aria-pressed={fogActive}
               aria-label={fogActive ? "Turn fog exploration off" : "Turn fog exploration on"}
@@ -1456,6 +1471,16 @@ export default function Home() {
             >
               <Trophy size={18} strokeWidth={2.2} />
               <span>Board</span>
+            </button>
+            <button
+              type="button"
+              className={`home-rail-chip${historyLayer ? " is-on" : ""}`}
+              aria-pressed={historyLayer}
+              aria-label={historyLayer ? "Turn history layer off" : "Turn history layer on"}
+              onClick={() => setHistoryLayer((current) => !current)}
+            >
+              <BookOpen size={18} strokeWidth={2.2} />
+              <span>History</span>
             </button>
           </aside>
 
@@ -1698,7 +1723,7 @@ export default function Home() {
                   playClick();
                   applyPlan();
                 }}>
-                  <span>{generating ? "Drawing loop…" : "Generate my Wander"}</span>
+                  <span>{generating ? "Drawing route…" : "Generate my Wander"}</span>
                   <span aria-hidden="true">{generating ? "…" : "→"}</span>
                 </button>
               </section>
@@ -1800,6 +1825,7 @@ export default function Home() {
           route={displayRoute}
           reviewTrailId={activePlan?.suggestionId ?? `route:${displayRoute.title}:${displayRoute.stops.map((stop) => stop.id).join("-")}`}
           currentStopIndex={walkStopIndex}
+          progress={walkProgress}
           locationStatus={walkLocationStatus}
           historyMoment={walkHistoryMoment}
           onBack={exitWalk}

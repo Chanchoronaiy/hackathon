@@ -52,7 +52,9 @@ export default function DailyQuestsScreen({
     setRailHost(document.querySelector(".home-rail-quests"));
   }, []);
 
-  const doneCount = quests.filter((quest) => isQuestCompleted(quest.id, profile)).length;
+  const doneQuests = quests.filter((quest) => isQuestCompleted(quest.id, profile));
+  const doneCount = doneQuests.length;
+  const questPointsToday = doneQuests.reduce((sum, quest) => sum + quest.points, 0);
   const selectedQuest = quests.find((quest) => quest.id === selectedQuestId) ?? null;
   const selectedDone = selectedQuest ? isQuestCompleted(selectedQuest.id, profile) : false;
 
@@ -62,7 +64,7 @@ export default function DailyQuestsScreen({
         <Sparkles size={14} aria-hidden="true" />
         {doneCount}/{quests.length} claimed today
       </span>
-      <strong>{profile.points.toLocaleString()} pts</strong>
+      <strong>+{questPointsToday.toLocaleString()} pts</strong>
       {onClose ? (
         <button type="button" className="quests-slide-close" aria-label="Close daily quests" onClick={onClose}>
           <X size={15} strokeWidth={2.4} />

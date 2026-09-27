@@ -60,14 +60,14 @@ export function resolveStart(position?: LatLng, startName?: string): AdelaidePla
     && Math.abs(place.position[1] - position[1]) < 1e-5
   ));
   if (match) {
-    return { ...match, reason: "Your start and finish" };
+    return { ...match, reason: "Your start" };
   }
   return {
     id: "custom-start",
     name: startName?.trim() || "Your start",
     category: "green",
     position,
-    reason: "Your start and finish",
+    reason: "Your start",
     surprise: 0,
     comfort: 2,
   };
@@ -79,17 +79,26 @@ function distanceKm(a: LatLng, b: LatLng) {
   return Math.hypot(latitudeKm, longitudeKm);
 }
 
+/** Wanders are one-way: start, then each stop, finishing at the last stop. */
 function routeDistance(start: AdelaidePlace, stops: AdelaidePlace[]) {
-  const points = [start, ...stops, start];
+  const points = [start, ...stops];
   return points.slice(1).reduce((sum, point, index) => sum + distanceKm(points[index].position, point.position), 0);
 }
 
-function orderAsLoop(start: AdelaidePlace, stops: AdelaidePlace[]) {
-  return [...stops].sort((a, b) => {
-    const angleA = Math.atan2(a.position[0] - start.position[0], a.position[1] - start.position[1]);
-    const angleB = Math.atan2(b.position[0] - start.position[0], b.position[1] - start.position[1]);
-    return angleA - angleB;
-  });
+function orderAsPath(start: AdelaidePlace, stops: AdelaidePlace[]) {
+  const remaining = [...stops];
+  const ordered: AdelaidePlace[] = [];
+  let current = start.position;
+  while (remaining.length > 0) {
+    let nearest = 0;
+    for (let index = 1; index < remaining.length; index += 1) {
+      if (distanceKm(current, remaining[index].position) < distanceKm(current, remaining[nearest].position)) nearest = index;
+    }
+    const [next] = remaining.splice(nearest, 1);
+    ordered.push(next);
+    current = next.position;
+  }
+  return ordered;
 }
 
 function combinations<T>(items: T[], size: number, start = 0, picked: T[] = [], output: T[][] = []): T[][] {
@@ -114,7 +123,7 @@ function chooseWithinBudget(start: AdelaidePlace, candidates: ScoredPlace[], des
   for (let count = desiredCount; count >= 1; count -= 1) {
     const valid = combinations(candidates, count)
       .map((group) => {
-        const stops = orderAsLoop(start, group.map(({ place }) => place));
+        const stops = orderAsPath(start, group.map(({ place }) => place));
         const variety = new Set(stops.map(({ category }) => category)).size * 2.5;
         const score = group.reduce((sum, item) => sum + item.score, 0) + variety;
         return { stops, score, duration: estimatedMinutes(start, stops) };
@@ -225,9 +234,7 @@ export function planWanderRoute({
 
     const scenicPicks: AdelaidePlace[] = [];
     for (const candidate of rotated.slice(0, 12)) {
-      const trial = orderAsLoop(start, [...scenicPicks, focusPlace, candidate.place].filter(
-        (place, index, list) => list.findIndex((item) => item.id === place.id) === index,
-      ));
+      const trial = [...orderAsPath(start, [...scenicPicks, candidate.place]), focusPlace];
       if (estimatedMinutes(start, trial) <= budget) {
         scenicPicks.push(candidate.place);
       }
@@ -236,7 +243,7 @@ export function planWanderRoute({
     // Quests always offer at least one optional scenic stop, even when it runs over the time budget.
     if (scenicPicks.length === 0 && rotated[0]) scenicPicks.push(rotated[0].place);
 
-    const orderedScenic = orderAsLoop(start, scenicPicks);
+    const orderedScenic = orderAsPath(start, scenicPicks);
     const questStop: RouteStop = {
       ...focusPlace,
       why: focusDestination
@@ -250,13 +257,13 @@ export function planWanderRoute({
 
     const directWaypoints: LatLng[] = [start.position, focusPlace.position];
     const optionalWaypoints: LatLng[] = orderedScenic.length > 0
-      ? [start.position, ...orderedScenic.map((place) => place.position), focusPlace.position, start.position]
+      ? [start.position, ...orderedScenic.map((place) => place.position), focusPlace.position]
       : [];
 
     const distance = distanceKm(start.position, focusPlace.position);
-    const optionalLoopPlaces = [...orderedScenic, focusPlace];
+    const optionalPlaces = [...orderedScenic, focusPlace];
     const optionalDistance = orderedScenic.length > 0
-      ? routeDistance(start, optionalLoopPlaces)
+      ? routeDistance(start, optionalPlaces)
       : undefined;
     return {
       title: focusPlace.name,
@@ -266,7 +273,7 @@ export function planWanderRoute({
       optionalGeometry: optionalWaypoints.length > 0 ? gridLoopGeometry(optionalWaypoints) : undefined,
       optionalDistanceKm: optionalDistance,
       optionalWalkingMinutes: optionalDistance != null
-        ? estimatedMinutes(start, optionalLoopPlaces)
+        ? estimatedMinutes(start, optionalPlaces)
         : undefined,
       distanceKm: distance,
       walkingMinutes: Math.max(1, Math.round((distance / 4.8) * 60)),
@@ -325,7 +332,7 @@ export function planWanderRoute({
     why: explainStop(place, byId.get(place.id), mode),
   }));
 
-  const waypoints: LatLng[] = [start.position, ...stops.map((stop) => stop.position), start.position];
+  const waypoints: LatLng[] = [start.position, ...stops.map((stop) => stop.position)];
   const distance = routeDistance(start, chosen);
   return {
     title: mode === "discover" ? "Laneways & little surprises" : "Arcades & leafy squares",

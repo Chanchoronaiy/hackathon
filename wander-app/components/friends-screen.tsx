@@ -16,13 +16,11 @@ export default function FriendsScreen({
   onOpenFriendsFog,
   onAddFriend,
 }: FriendsScreenProps) {
-  const { snapshot, error } = useFriends();
+  const { snapshot, entries: leaderboard } = useFriends();
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [username, setUsername] = useState("");
-  const leaderboard = snapshot?.entries ?? [];
-
   async function respond(id: string, accept: boolean) {
     if (busy) return;
     setBusy(id); setNotice(null);
@@ -63,8 +61,6 @@ export default function FriendsScreen({
         </form>
       )}
       {notice && <p role="status">{notice}</p>}
-      {error && <p role="alert">{error}</p>}
-      {!snapshot && !error && <p>Loading friends…</p>}
 
       <button
         type="button"
@@ -122,7 +118,7 @@ export default function FriendsScreen({
             </button>
           </div>)}
         </>
-      ) : snapshot ? <p>No pending requests.</p> : null}
+      ) : null}
     </section>
   );
 }

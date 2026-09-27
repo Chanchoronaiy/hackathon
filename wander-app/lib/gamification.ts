@@ -102,6 +102,14 @@ export function isQuestCompleted(questId: string, profile = readGamificationProf
     || profile.completedEventIds.includes(`daily:${questId}`);
 }
 
+/** Adopts the server's authoritative total and tells every points listener to refresh. */
+export function applyCloudPoints(cloudPoints: number | null | undefined) {
+  if (typeof window === "undefined" || typeof cloudPoints !== "number") return;
+  const synced = { ...readGamificationProfile(), points: cloudPoints };
+  window.localStorage.setItem(PROFILE_KEY, JSON.stringify(synced));
+  window.dispatchEvent(new CustomEvent("wander:points", { detail: synced }));
+}
+
 export function awardPoints(eventId: string, points: number, syncCloud = true): GamificationProfile {
   const current = readGamificationProfile();
   if (current.completedEventIds.includes(eventId)) return current;
@@ -115,12 +123,7 @@ export function awardPoints(eventId: string, points: number, syncCloud = true): 
     if (syncCloud) {
       void import("@/lib/cloud-data")
         .then(({ syncPointsEvent }) => syncPointsEvent(eventId, points, "Wander activity"))
-        .then((cloudPoints) => {
-          if (typeof cloudPoints !== "number") return;
-          const synced = { ...readGamificationProfile(), points: cloudPoints };
-          window.localStorage.setItem(PROFILE_KEY, JSON.stringify(synced));
-          window.dispatchEvent(new CustomEvent("wander:points", { detail: synced }));
-        })
+        .then(applyCloudPoints)
         .catch(() => undefined);
     }
   }
@@ -148,12 +151,7 @@ export function completeWalk(eventId: string, minutes: number, captured: boolean
   if (typeof window !== "undefined") {
     void import("@/lib/cloud-data")
       .then(({ syncCompletedWalk }) => syncCompletedWalk(eventId, completedMinutes))
-      .then((cloudPoints) => {
-        if (typeof cloudPoints !== "number") return;
-        const synced = { ...readGamificationProfile(), points: cloudPoints };
-        window.localStorage.setItem(PROFILE_KEY, JSON.stringify(synced));
-        window.dispatchEvent(new CustomEvent("wander:points", { detail: synced }));
-      })
+      .then(applyCloudPoints)
       .catch(() => undefined);
   }
 
