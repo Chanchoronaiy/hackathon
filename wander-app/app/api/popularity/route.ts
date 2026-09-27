@@ -18,9 +18,16 @@ const ADELAIDE_POPULARITY_FALLBACK: PopularPlace[] = [
   { id: "fallback-himeji", name: "Himeji Garden", position: [-34.9352, 138.6076], rating: 0, reviewCount: 0, score: 0.64 },
 ];
 
+// Always shown, whether or not Google Places answers (outside its CBD search radius).
+const ALWAYS_POPULAR: PopularPlace[] = [
+  { id: "pinned-tea-tree-plaza", name: "Westfield Tea Tree Plaza", position: [-34.8287, 138.6890], rating: 0, reviewCount: 0, score: 0.82 },
+  { id: "pinned-glenelg", name: "Glenelg", position: [-34.9807, 138.5130], rating: 0, reviewCount: 0, score: 0.96 },
+  { id: "pinned-henley-beach", name: "Henley Beach", position: [-34.9197, 138.4936], rating: 0, reviewCount: 0, score: 0.86 },
+];
+
 function fallback(reason: string) {
   return Response.json(
-    { places: ADELAIDE_POPULARITY_FALLBACK, source: "curated-fallback", warning: reason },
+    { places: [...ADELAIDE_POPULARITY_FALLBACK, ...ALWAYS_POPULAR], source: "curated-fallback", warning: reason },
     { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=3600" } },
   );
 }
@@ -64,5 +71,5 @@ export async function GET() {
 
   if (!places.length) return fallback("Google Places returned no locations");
 
-  return Response.json({ places, source: "google-places" }, { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } });
+  return Response.json({ places: [...places, ...ALWAYS_POPULAR], source: "google-places" }, { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } });
 }
