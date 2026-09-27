@@ -4,7 +4,7 @@
 
 # Wander
 
-**Turn spare minutes into a walk through somewhere you have never explored before.**
+**Turn spare minutes into a walk through exciting spots to wind your mind down.**
 
 Wander is a mobile-first walking app for Adelaide. Pick a start point, walking time and interests, then receive a walkable route with local places, history and optional quests. Completing walks clears your exploration fog, saves memories and earns points on the leaderboard.
 
@@ -36,7 +36,6 @@ Wander is a mobile-first walking app for Adelaide. Pick a start point, walking t
   <img src="https://cdn.jsdelivr.net/gh/devicons/devicon@v2.17.0/icons/supabase/supabase-original.svg" alt="Supabase" title="Supabase" width="40" height="40">
 </p>
 
-Icons from [Devicon](https://devicon.dev/).
 
 | Area | Technology |
 | --- | --- |
@@ -48,38 +47,6 @@ Icons from [Devicon](https://devicon.dev/).
 | Street View and place search (optional) | Google Maps Embed API and Places API (New) |
 | Deployment | Cloudflare/Vercel-compatible web app |
 
-## Run it locally
-
-```bash
-git clone https://github.com/Chanchoronaiy/hackathon.git
-cd hackathon/wander-app
-pnpm install
-pnpm dev
-```
-
-Open [http://localhost:3000](http://localhost:3000).
-
-## Environment variables
-
-Copy `wander-app/.env.example` to `wander-app/.env.local`, then add only the services you are using:
-
-```bash
-OPENROUTESERVICE_API_KEY=
-NEXT_PUBLIC_GOOGLE_MAPS_EMBED_KEY=
-GOOGLE_PLACES_API_KEY=
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-```
-
-Restart `pnpm dev` after saving `.env.local`. Never commit `.env.local`, a Google server key, or a Supabase service-role key.
-
-## Set up shared data with Supabase
-
-Wander works locally without Supabase. To enable profiles, saved routes, photos, points, leaderboards and friends:
-
-1. Create a Supabase project and enable **Anonymous Sign-Ins** in Authentication → Providers.
-2. In the Supabase SQL Editor, run the files in `wander-app/supabase/migrations` in this order: `001_wander.sql`, `002_walk_completion_points.sql`, `002_walk_memories.sql`, `003_walk_capture_bonus.sql`, then `004_friend_requests.sql`.
-3. Add the project URL and publishable/anon key to `.env.local`.
 
 ## Data and acknowledgements
 
