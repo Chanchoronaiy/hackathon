@@ -62,10 +62,10 @@ function questPinIcon(number: number, done: boolean, selected: boolean) {
   });
 }
 
-function streetViewBuddyIcon(held: boolean) {
+function streetViewBuddyIcon() {
   return L.divIcon({
-    className: `streetview-buddy-marker${held ? " is-held" : ""}`,
-    html: `<span aria-hidden="true"><img src="/mascot/street-view-buddy-${held ? "held" : "idle"}.png" alt="" draggable="false" /></span>`,
+    className: "streetview-buddy-marker",
+    html: `<span aria-hidden="true"><img class="buddy-idle" src="/mascot/street-view-buddy-idle.png" alt="" draggable="false" /><img class="buddy-held" src="/mascot/street-view-buddy-held.png" alt="" draggable="false" /></span>`,
     iconSize: [76, 86],
     iconAnchor: [38, 78],
   });
@@ -242,6 +242,7 @@ export default function WanderMap({
   optionalRouteActive = false,
   onSelectQuest,
   onStreetViewPosition,
+  streetViewOpen = false,
   popularPlaces = [],
   onExploreStop,
   onSelectOptionalStop,
@@ -261,6 +262,7 @@ export default function WanderMap({
   optionalRouteActive?: boolean;
   onSelectQuest?: (id: string) => void;
   onStreetViewPosition?: (position: LatLng) => void;
+  streetViewOpen?: boolean;
   popularPlaces?: PopularPlace[];
   onExploreStop: (id: string) => void;
   onSelectOptionalStop?: (id: string) => void;
@@ -271,7 +273,6 @@ export default function WanderMap({
   const explored = useMemo(() => new Set(exploredIds), [exploredIds]);
   const [clearings, setClearings] = useState<Clearing[]>([]);
   const [streetViewBuddyPosition, setStreetViewBuddyPosition] = useState<LatLng | null>(null);
-  const [streetViewBuddyHeld, setStreetViewBuddyHeld] = useState(false);
   const streetViewHoldTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exploredPositions = useMemo(() => [
     ...exploredPositionsFor(exploredIds),
@@ -305,14 +306,18 @@ export default function WanderMap({
     streetViewHoldTimer.current = null;
   }
 
-  function prepareStreetViewPickup() {
-    clearStreetViewHoldTimer();
-    streetViewHoldTimer.current = setTimeout(() => setStreetViewBuddyHeld(true), 260);
+  function setStreetViewBuddyHeld(marker: L.Marker, held: boolean) {
+    marker.getElement()?.classList.toggle("is-held", held);
   }
 
-  function releaseStreetViewBuddy() {
+  function prepareStreetViewPickup(marker: L.Marker) {
     clearStreetViewHoldTimer();
-    setStreetViewBuddyHeld(false);
+    streetViewHoldTimer.current = setTimeout(() => setStreetViewBuddyHeld(marker, true), 260);
+  }
+
+  function releaseStreetViewBuddy(marker: L.Marker) {
+    clearStreetViewHoldTimer();
+    setStreetViewBuddyHeld(marker, false);
   }
 
   useEffect(() => () => clearStreetViewHoldTimer(), []);
@@ -354,24 +359,24 @@ export default function WanderMap({
               />
             ))}
           </Pane>
-          {showRoute && !walkMode && (
+          {showRoute && !walkMode && !streetViewOpen && (
             <Marker
               position={streetViewBuddyPosition ?? start.position}
-              icon={streetViewBuddyIcon(streetViewBuddyHeld)}
+              icon={streetViewBuddyIcon()}
               draggable
               zIndexOffset={700}
               eventHandlers={{
-                mousedown: prepareStreetViewPickup,
-                mouseup: releaseStreetViewBuddy,
-                dragstart: () => {
+                mousedown: (event) => prepareStreetViewPickup(event.target as L.Marker),
+                mouseup: (event) => releaseStreetViewBuddy(event.target as L.Marker),
+                dragstart: (event) => {
                   clearStreetViewHoldTimer();
-                  setStreetViewBuddyHeld(true);
+                  setStreetViewBuddyHeld(event.target as L.Marker, true);
                 },
                 dragend: (event) => {
                   const point = event.target.getLatLng();
                   const next: LatLng = [point.lat, point.lng];
                   setStreetViewBuddyPosition(next);
-                  releaseStreetViewBuddy();
+                  releaseStreetViewBuddy(event.target as L.Marker);
                   onStreetViewPosition?.(next);
                 },
               }}

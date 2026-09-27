@@ -1063,6 +1063,7 @@ export default function Home() {
         onSelectOptionalStop={() => setOptionalRouteActive((current) => !current)}
         onExplorationPercent={setExplorationPercent}
         onStreetViewPosition={setStreetViewPosition}
+        streetViewOpen={Boolean(streetViewPosition)}
         popularPlaces={heatMapHidden ? [] : popularPlaces}
       />
       {streetViewPosition && (
