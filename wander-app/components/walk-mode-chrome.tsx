@@ -102,9 +102,9 @@ export default function WalkModeChrome({
       </p>
 
       {historyMoment ? (
-        <aside className="walk-history-toast" aria-live="polite" aria-label={`${historyMoment.sourceUrl ? "Local history" : "Wander note"} at ${historyMoment.siteName}`}>
+        <aside className="walk-history-toast" aria-live="polite" aria-label={`Local history at ${historyMoment.siteName}`}>
           <div className="walk-history-toast-head">
-            <span>{historyMoment.sourceUrl ? "A little local history" : "A note for your wander"} · {historyMoment.siteName}</span>
+            <span>A little local history · {historyMoment.siteName}</span>
             <button type="button" aria-label="Dismiss history fact" onClick={onDismissHistoryMoment}>
               <X size={16} aria-hidden="true" />
             </button>
@@ -112,9 +112,7 @@ export default function WalkModeChrome({
           <p>{historyMoment.fact}</p>
           {historyMoment.sourceUrl && historyMoment.sourceLabel ? (
             <a href={historyMoment.sourceUrl} target="_blank" rel="noreferrer">Source: {historyMoment.sourceLabel}</a>
-          ) : (
-            <span className="walk-history-source">From the curated Adelaide place guide</span>
-          )}
+          ) : null}
           {historyMoment.beforeAfter ? (
             <button type="button" className="walk-history-compare-trigger" onClick={() => setPhotoComparisonOpen(true)}>
               <Images size={16} aria-hidden="true" /> View before &amp; after photos

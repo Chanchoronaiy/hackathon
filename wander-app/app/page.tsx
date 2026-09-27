@@ -200,7 +200,6 @@ export default function Home() {
   const walkStartedAtRef = useRef<string | null>(null);
   const walkCapturesRef = useRef<WalkCapture[]>([]);
   const seenWalkHistorySitesRef = useRef(new Set<string>());
-  const seenWalkStopsRef = useRef(new Set<string>());
   const [mode, setMode] = useState<Mode>("discover");
   const [wanderHours, setWanderHours] = useState(0);
   const [wanderMinutes, setWanderMinutes] = useState(15);
@@ -545,18 +544,15 @@ export default function Home() {
     setWalkHistoryMoment(null);
   }, []);
 
-  /** What tapping Next shows for a stop: the same card GPS arrival would. */
-  const showStopMoment = useCallback((stop: RouteStop) => {
-    if (seenWalkStopsRef.current.has(stop.id)) return;
-    seenWalkStopsRef.current.add(stop.id);
-    const site = HISTORY_SITES.find((candidate) => distanceMetres(candidate.position, stop.position) <= 150);
-    if (site) {
-      if (seenWalkHistorySitesRef.current.has(site.id)) return;
-      seenWalkHistorySitesRef.current.add(site.id);
-      setWalkHistoryMoment(historySiteMoment(site));
-      return;
-    }
-    setWalkHistoryMoment({ siteName: stop.name, fact: stop.reason });
+  /** Tapping Next shows a stop's local history, as GPS arrival would. */
+  const showStopHistory = useCallback((stop: RouteStop) => {
+    const site = HISTORY_SITES.find((candidate) => (
+      !seenWalkHistorySitesRef.current.has(candidate.id)
+      && distanceMetres(candidate.position, stop.position) <= 150
+    ));
+    if (!site) return;
+    seenWalkHistorySitesRef.current.add(site.id);
+    setWalkHistoryMoment(historySiteMoment(site));
   }, []);
 
   useEffect(() => {
@@ -598,18 +594,6 @@ export default function Home() {
 
         const nextStop = displayRoute.stops[walkStopIndex];
         if (nextStop && distanceMetres(next, nextStop.position) <= 45) {
-          if (!seenWalkStopsRef.current.has(nextStop.id)) {
-            seenWalkStopsRef.current.add(nextStop.id);
-            const stopHasHistory = HISTORY_SITES.some((site) => (
-              distanceMetres(site.position, nextStop.position) <= 150
-            ));
-            if (!nearbyHistorySite && !stopHasHistory) {
-              setWalkHistoryMoment({
-                siteName: nextStop.name,
-                fact: nextStop.reason,
-              });
-            }
-          }
           setExploredIds(markExplored(nextStop.id));
           setWalkStopIndex((current) => Math.min(displayRoute.stops.length, current + 1));
         }
@@ -1187,7 +1171,6 @@ export default function Home() {
       walkStartedAtRef.current = new Date().toISOString();
       walkCapturesRef.current = [];
       seenWalkHistorySitesRef.current = new Set();
-      seenWalkStopsRef.current = new Set();
     }
     setWalkStopIndex(0);
     setWalkPosition(null);
@@ -1860,7 +1843,7 @@ export default function Home() {
             const stop = displayRoute.stops[walkStopIndex];
             if (stop) {
               handleExploreStop(stop.id);
-              showStopMoment(stop);
+              showStopHistory(stop);
             }
             setWalkStopIndex((current) => Math.min(displayRoute.stops.length, current + 1));
           }}
