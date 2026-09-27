@@ -906,20 +906,29 @@ button,input { font:inherit; } button { cursor:pointer; }
 .explore-review-submit { width:100%; min-height:46px; margin-top:14px; border:0; border-radius:12px; background:#64864d; color:#fffdf8; font-size:14px; font-weight:850; }
 .explore-empty { margin:0; color:var(--muted); font-size:13px; font-weight:650; }
 .explore-collections { display:grid; gap:10px; }
+.explore-collection-shell { display:grid; overflow:hidden; border-radius:16px; }
+.explore-collection-shell.is-coffee { background:#f3dfd0; }
+.explore-collection-shell.is-heritage { background:#e4dceb; }
 .explore-collection {
-  display:grid; grid-template-columns:44px 1fr auto; gap:12px; align-items:center;
-  width:100%; min-height:76px; padding:12px 14px; border:0; border-radius:18px;
-  text-align:left; color:var(--ink);
+  display:grid; grid-template-columns:58px minmax(0,1fr) auto; gap:12px; align-items:center;
+  width:100%; min-height:78px; padding:11px 14px 6px; border:0;
+  background:transparent; text-align:left; color:var(--ink);
 }
-.explore-collection.is-coffee { background:#f3dfd0; }
-.explore-collection.is-heritage { background:#e4dceb; }
-.explore-collection-icon {
-  width:44px; height:44px; display:grid; place-items:center; border-radius:14px;
-  background:rgba(255,253,248,.9); color:#3f453d;
+.explore-collection-image {
+  position:relative; display:block; width:58px; height:58px; overflow:hidden;
+  border:2px solid rgba(255,253,248,.82); border-radius:12px; background:#d7d0c5;
+  box-shadow:0 2px 7px rgba(36,30,31,.12);
 }
+.explore-collection-image img { object-fit:cover; }
+.explore-collection-image.is-coffee-photo { height:72px; }
 .explore-collection-copy { display:grid; gap:3px; min-width:0; }
 .explore-collection-copy strong { font-size:15px; font-weight:800; letter-spacing:-.02em; }
 .explore-collection-copy span { color:#5c625b; font-size:12px; font-weight:650; }
+.explore-collection-copy .explore-collection-credit { color:#756c68; font-size:10px; font-weight:700; }
+.explore-collection-source {
+  justify-self:end; margin:0 14px 7px 84px; color:#5a6254; font-size:10px; font-weight:750;
+  text-decoration:underline; text-decoration-color:rgba(90,98,84,.35); text-underline-offset:2px;
+}
 
 /* Memories screen */
 .memories-screen {

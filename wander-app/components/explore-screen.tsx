@@ -1,6 +1,7 @@
 "use client";
 
-import { ChevronRight, Coffee, MapPin, Search, Star, X } from "lucide-react";
+import { ChevronRight, Search, Star, X } from "lucide-react";
+import Image from "next/image";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { addTrailReview, getTrailReviewsSnapshot, subscribeToTrailReviews, type TrailReview } from "@/lib/trail-reviews";
 
@@ -219,30 +220,48 @@ export default function ExploreScreen({ onOpenSuggestion, onOpenCollection }: Ex
       </div>
 
       <div className="explore-collections">
-        <button
-          type="button"
-          className="explore-collection is-coffee"
-          onClick={() => onOpenCollection?.("coffee")}
-        >
-          <span className="explore-collection-icon" aria-hidden="true"><Coffee size={18} /></span>
-          <span className="explore-collection-copy">
-            <strong>Best laneway coffee</strong>
-            <span>7 routes · Curated by locals</span>
-          </span>
-          <ChevronRight size={18} aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          className="explore-collection is-heritage"
-          onClick={() => onOpenCollection?.("heritage")}
-        >
-          <span className="explore-collection-icon" aria-hidden="true"><MapPin size={18} /></span>
-          <span className="explore-collection-copy">
-            <strong>North Adelaide heritage</strong>
-            <span>5 routes · 112 saves</span>
-          </span>
-          <ChevronRight size={18} aria-hidden="true" />
-        </button>
+        <div className="explore-collection-shell is-coffee">
+          <button
+            type="button"
+            className="explore-collection is-coffee"
+            onClick={() => onOpenCollection?.("coffee")}
+          >
+            <span className="explore-collection-image is-coffee-photo">
+              <Image
+                src="https://upload.wikimedia.org/wikipedia/commons/9/9f/Flat_white_at_an_Adelaide_cafe.jpg"
+                alt="Flat white served at an Adelaide cafe"
+                fill
+                sizes="56px"
+                unoptimized
+              />
+            </span>
+            <span className="explore-collection-copy">
+              <strong>Best laneway coffee</strong>
+              <span>7 routes · Curated by locals</span>
+              <span className="explore-collection-credit">Photo: Ashton 29 · CC BY-SA 4.0</span>
+            </span>
+            <ChevronRight size={18} aria-hidden="true" />
+          </button>
+          <a className="explore-collection-source" href="https://commons.wikimedia.org/wiki/File:Flat_white_at_an_Adelaide_cafe.jpg" target="_blank" rel="noreferrer" aria-label="Image source and license for Adelaide cafe photo">Image source</a>
+        </div>
+        <div className="explore-collection-shell is-heritage">
+          <button
+            type="button"
+            className="explore-collection is-heritage"
+            onClick={() => onOpenCollection?.("heritage")}
+          >
+            <span className="explore-collection-image">
+              <Image src="https://upload.wikimedia.org/wikipedia/commons/6/67/Heritage-listed_building_on_Pennington_Terrace%2C_North_Adelaide_%28028A8523%29.jpg" alt="Heritage-listed terrace building in North Adelaide" fill sizes="56px" unoptimized />
+            </span>
+            <span className="explore-collection-copy">
+              <strong>North Adelaide heritage</strong>
+              <span>5 routes · 112 saves</span>
+              <span className="explore-collection-credit">Photo: Yu Chu Chin · CC BY-SA 4.0</span>
+            </span>
+            <ChevronRight size={18} aria-hidden="true" />
+          </button>
+          <a className="explore-collection-source" href="https://commons.wikimedia.org/wiki/File:Heritage-listed_building_on_Pennington_Terrace,_North_Adelaide_(028A8523).jpg" target="_blank" rel="noreferrer" aria-label="Image source and license for heritage building photo">Image source</a>
+        </div>
       </div>
 
       {reviewingTrail ? (
