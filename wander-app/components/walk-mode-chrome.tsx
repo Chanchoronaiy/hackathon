@@ -1,6 +1,8 @@
 "use client";
 
 import { ArrowLeft, Camera, Check, CornerUpRight } from "lucide-react";
+import { useRef } from "react";
+import { completeWalk } from "@/lib/gamification";
 import type { WanderRoute } from "@/lib/route-planner";
 
 type WalkModeChromeProps = {
@@ -51,6 +53,13 @@ export default function WalkModeChrome({
   const minsLeft = remainingMinutes(route, currentStopIndex);
   const kmLeft = remainingKm(route, currentStopIndex);
   const progress = walkPercent(route, currentStopIndex);
+  const completionEventRef = useRef<string | null>(null);
+
+  function finishAndAwardPoints() {
+    completionEventRef.current ??= `walk:${crypto.randomUUID()}`;
+    completeWalk(completionEventRef.current, route.walkingMinutes);
+    onFinish();
+  }
 
   return (
     <>
@@ -73,8 +82,8 @@ export default function WalkModeChrome({
       </div>
 
       {memorySaved ? (
-        <button type="button" className="walk-capture is-saved" disabled>
-          Memory saved ✓
+        <button type="button" className="walk-capture is-saved" aria-label="Memory saved ✓" disabled>
+          <Check size={20} strokeWidth={2.6} aria-hidden="true" />
         </button>
       ) : (
         <button type="button" className="walk-capture" aria-label="Capture moment for Memories" onClick={onCapture}>
@@ -121,7 +130,7 @@ export default function WalkModeChrome({
                 Capture
               </button>
             )}
-            <button type="button" className="walk-done-end" onClick={onFinish}>
+            <button type="button" className="walk-done-end" onClick={finishAndAwardPoints}>
               <Check size={18} strokeWidth={2.4} aria-hidden="true" />
               End walk
             </button>

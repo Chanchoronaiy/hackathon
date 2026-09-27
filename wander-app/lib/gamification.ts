@@ -23,6 +23,7 @@ export type LeaderboardEntry = {
 };
 
 const EMPTY_PROFILE: GamificationProfile = { points: 0, completedEventIds: [] };
+export const WALK_POINTS_PER_MINUTE = 10;
 
 const QUEST_BONUSES = [220, 250, 280, 300, 340];
 
@@ -43,14 +44,33 @@ function hashDate(value: string) {
   return hash;
 }
 
+function seededRandom(seed: number) {
+  let value = seed >>> 0;
+  return () => {
+    value += 0x6D2B79F5;
+    let mixed = value;
+    mixed = Math.imul(mixed ^ (mixed >>> 15), mixed | 1);
+    mixed ^= mixed + Math.imul(mixed ^ (mixed >>> 7), mixed | 61);
+    return ((mixed ^ (mixed >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleForDate<T>(items: T[], dateKey: string) {
+  const shuffled = [...items];
+  const random = seededRandom(hashDate(dateKey));
+  for (let index = shuffled.length - 1; index > 0; index -= 1) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 /** Five deterministic Adelaide quests: identical for all users on the same local date. */
 export function dailyQuests(date = new Date()): DailyQuest[] {
   const dateKey = localDateKey(date);
   const pool = ADELAIDE_PLACES.filter((place) => !["water", "calm"].includes(place.category));
-  const start = hashDate(dateKey) % pool.length;
-  const step = 7;
-  return Array.from({ length: Math.min(5, pool.length) }, (_, index) => {
-    const place = pool[(start + index * step) % pool.length];
+  const selectedPlaces = shuffleForDate(pool, dateKey).slice(0, Math.min(5, pool.length));
+  return selectedPlaces.map((place, index) => {
     return {
       id: `${dateKey}:${place.id}`,
       place,
@@ -107,6 +127,31 @@ export function awardPoints(eventId: string, points: number, syncCloud = true): 
 
 export function completeDailyQuest(quest: DailyQuest): GamificationProfile {
   return awardPoints(quest.id, quest.points);
+}
+
+export function walkPointsForMinutes(minutes: number) {
+  const completedMinutes = Math.max(1, Math.min(180, Math.round(minutes)));
+  return completedMinutes * WALK_POINTS_PER_MINUTE;
+}
+
+/** Awards a completed walk once locally, then reconciles the total with Supabase. */
+export function completeWalk(eventId: string, minutes: number): GamificationProfile {
+  const completedMinutes = Math.max(1, Math.min(180, Math.round(minutes)));
+  const next = awardPoints(eventId, walkPointsForMinutes(completedMinutes), false);
+
+  if (typeof window !== "undefined") {
+    void import("@/lib/cloud-data")
+      .then(({ syncCompletedWalk }) => syncCompletedWalk(eventId, completedMinutes))
+      .then((cloudPoints) => {
+        if (typeof cloudPoints !== "number") return;
+        const synced = { ...readGamificationProfile(), points: cloudPoints };
+        window.localStorage.setItem(PROFILE_KEY, JSON.stringify(synced));
+        window.dispatchEvent(new CustomEvent("wander:points", { detail: synced }));
+      })
+      .catch(() => undefined);
+  }
+
+  return next;
 }
 
 type DemoPerson = {

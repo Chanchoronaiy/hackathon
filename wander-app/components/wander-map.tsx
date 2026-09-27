@@ -62,13 +62,12 @@ function questPinIcon(number: number, done: boolean, selected: boolean) {
   });
 }
 
-function streetViewBuddyIcon() {
-  return L.divIcon({
-    className: "streetview-buddy-marker",
-    html: `<span aria-hidden="true">👋</span>`,
-    iconSize: [48, 48],
-    iconAnchor: [24, 42],
-  });
+function MapReady({ onReady }: { onReady: (map: L.Map) => void }) {
+  const map = useMap();
+  useEffect(() => {
+    onReady(map);
+  }, [map, onReady]);
+  return null;
 }
 
 function CreamWash() {
@@ -241,7 +240,7 @@ export default function WanderMap({
   selectedQuestId = null,
   optionalRouteActive = false,
   onSelectQuest,
-  onStreetViewPosition,
+  onMapReady,
   popularPlaces = [],
   onExploreStop,
   onSelectOptionalStop,
@@ -260,7 +259,7 @@ export default function WanderMap({
   selectedQuestId?: string | null;
   optionalRouteActive?: boolean;
   onSelectQuest?: (id: string) => void;
-  onStreetViewPosition?: (position: LatLng) => void;
+  onMapReady?: (map: L.Map) => void;
   popularPlaces?: PopularPlace[];
   onExploreStop: (id: string) => void;
   onSelectOptionalStop?: (id: string) => void;
@@ -270,7 +269,6 @@ export default function WanderMap({
   const start = route.start;
   const explored = useMemo(() => new Set(exploredIds), [exploredIds]);
   const [clearings, setClearings] = useState<Clearing[]>([]);
-  const [streetViewBuddyPosition, setStreetViewBuddyPosition] = useState<LatLng | null>(null);
   const exploredPositions = useMemo(() => [
     ...exploredPositionsFor(exploredIds),
     ...exploredTrail.map((position, index) => ({ id: `trail-${index}`, position })),
@@ -335,22 +333,7 @@ export default function WanderMap({
               />
             ))}
           </Pane>
-          {showRoute && !walkMode && (
-            <Marker
-              position={streetViewBuddyPosition ?? start.position}
-              icon={streetViewBuddyIcon()}
-              draggable
-              zIndexOffset={700}
-              eventHandlers={{
-                dragend: (event) => {
-                  const point = event.target.getLatLng();
-                  const next: LatLng = [point.lat, point.lng];
-                  setStreetViewBuddyPosition(next);
-                  onStreetViewPosition?.(next);
-                },
-              }}
-            />
-          )}
+          {onMapReady && <MapReady onReady={onMapReady} />}
           {questPins.map((pin) => (
             <Marker
               key={pin.id}
