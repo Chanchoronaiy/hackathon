@@ -48,10 +48,24 @@ function getPhotoSnapshot() {
   return localStorage.getItem(PHOTO_STORAGE_KEY) ?? "[]";
 }
 
-type Highlight = { id: string; url: string; label: string; date: string };
+type WalkPhoto = {
+  id: string;
+  url: string;
+  label: string;
+  date: string;
+  /** `YYYY-MM`, matching MonthGroup ids so photos join their month's section. */
+  monthId: string;
+  monthTitle: string;
+  day: string;
+};
 
-function useWalkHighlights() {
-  const [highlights, setHighlights] = useState<Highlight[]>([]);
+function monthIdFor(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Walk photos from IndexedDB, newest first, each tagged with the month and year it was taken. */
+function useWalkPhotos() {
+  const [photos, setPhotos] = useState<WalkPhoto[]>([]);
   useEffect(() => {
     let active = true;
     let urls: string[] = [];
@@ -59,14 +73,20 @@ function useWalkHighlights() {
       const memories = await listWalkMemories();
       if (!active) return;
       urls.forEach((url) => URL.revokeObjectURL(url));
-      const next = memories.map((memory) => ({
-        id: memory.id,
-        url: URL.createObjectURL(memory.photo),
-        label: memory.stopName || memory.routeTitle || "Wander",
-        date: new Date(memory.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }),
-      }));
+      const next = memories.map((memory) => {
+        const taken = new Date(memory.createdAt);
+        return {
+          id: memory.id,
+          url: URL.createObjectURL(memory.photo),
+          label: memory.stopName || memory.routeTitle || "Wander",
+          date: taken.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" }),
+          monthId: monthIdFor(taken),
+          monthTitle: taken.toLocaleDateString("en-AU", { month: "long", year: "numeric" }),
+          day: String(taken.getDate()).padStart(2, "0"),
+        };
+      });
       urls = next.map((item) => item.url);
-      setHighlights(next);
+      setPhotos(next);
     };
     void load();
     window.addEventListener(MEMORIES_CHANGED_EVENT, load);
@@ -76,12 +96,12 @@ function useWalkHighlights() {
       urls.forEach((url) => URL.revokeObjectURL(url));
     };
   }, []);
-  return highlights;
+  return photos;
 }
 
 const MONTHS: MonthGroup[] = [
   {
-    id: "may-2025",
+    id: "2025-05",
     title: "May 2025",
     count: 8,
     moments: [
@@ -96,7 +116,7 @@ const MONTHS: MonthGroup[] = [
     ],
   },
   {
-    id: "apr-2025",
+    id: "2025-04",
     title: "April 2025",
     count: 6,
     moments: [
@@ -109,7 +129,7 @@ const MONTHS: MonthGroup[] = [
     ],
   },
   {
-    id: "mar-2025",
+    id: "2025-03",
     title: "March 2025",
     count: 8,
     moments: [
@@ -124,6 +144,13 @@ const MONTHS: MonthGroup[] = [
     ],
   },
 ];
+
+/** Month ids used by photos saved before ids became `YYYY-MM`. */
+const LEGACY_MONTH_IDS: Record<string, string> = {
+  "may-2025": "2025-05",
+  "apr-2025": "2025-04",
+  "mar-2025": "2025-03",
+};
 
 function MomentGlyph({ icon }: { icon: MomentIcon }) {
   const props = { size: 22, strokeWidth: 1.7, "aria-hidden": true as const };
@@ -150,13 +177,29 @@ function MomentGlyph({ icon }: { icon: MomentIcon }) {
 export default function MemoriesScreen() {
   const photoData = useSyncExternalStore(subscribeToPhotos, getPhotoSnapshot, () => "[]");
   const photos = useMemo(
-    () => (JSON.parse(photoData) as PhotoMemory[]).map((photo) => ({ ...photo, monthId: photo.monthId ?? MONTHS[0].id })),
+    () => (JSON.parse(photoData) as PhotoMemory[]).map((photo) => ({
+      ...photo,
+      monthId: LEGACY_MONTH_IDS[photo.monthId] ?? photo.monthId ?? MONTHS[0].id,
+    })),
     [photoData],
   );
   const [photoError, setPhotoError] = useState<string | null>(null);
-  const highlights = useWalkHighlights();
+  const walkPhotos = useWalkPhotos();
   const [viewingIndex, setViewingIndex] = useState<number | null>(null);
-  const viewing = viewingIndex != null ? highlights[viewingIndex] : null;
+  const viewing = viewingIndex != null ? walkPhotos[viewingIndex] : null;
+  const months = useMemo(() => {
+    const byId = new Map<string, MonthGroup & { walkPhotos: WalkPhoto[] }>(
+      MONTHS.map((month) => [month.id, { ...month, walkPhotos: [] }]),
+    );
+    for (const photo of walkPhotos) {
+      const month = byId.get(photo.monthId)
+        ?? { id: photo.monthId, title: photo.monthTitle, count: 0, moments: [], walkPhotos: [] };
+      month.walkPhotos.push(photo);
+      byId.set(photo.monthId, month);
+    }
+    return [...byId.values()].sort((a, b) => b.id.localeCompare(a.id));
+  }, [walkPhotos]);
+  const memoryCount = MONTHS.reduce((sum, month) => sum + month.count, 0) + walkPhotos.length;
 
   function handleDeletePhoto(photoId: string) {
     try {
@@ -178,34 +221,15 @@ export default function MemoriesScreen() {
         </div>
       </header>
 
-      <p className="memories-stats">22 memories · 11 walks · 27 km</p>
+      <p className="memories-stats">{memoryCount} memories · 11 walks · 27 km</p>
 
-      {highlights.length > 0 ? (
-      <div className="memories-highlights" role="list" aria-label="Walk memories">
-        {highlights.map((highlight, index) => (
-          <button
-            key={highlight.id}
-            type="button"
-            role="listitem"
-            className="memories-highlight"
-            aria-label={`Open memory from ${highlight.label}, ${highlight.date}`}
-            onClick={() => setViewingIndex(index)}
-          >
-            <span className="memories-highlight-ring">
-              <img src={highlight.url} alt="" />
-            </span>
-            <span className="memories-highlight-label">{highlight.label}</span>
-          </button>
-        ))}
-      </div>
-      ) : null}
       {photoError ? <output className="memories-photo-error">{photoError}</output> : null}
 
       {viewing ? (
         <div className="memory-viewer" role="dialog" aria-modal="true" aria-label={`Memory from ${viewing.label}`}>
           <div className="memory-viewer-bars" aria-hidden="true">
-            {highlights.map((highlight, index) => (
-              <span key={highlight.id} className={index <= (viewingIndex ?? 0) ? "is-seen" : ""} />
+            {walkPhotos.map((photo, index) => (
+              <span key={photo.id} className={index <= (viewingIndex ?? 0) ? "is-seen" : ""} />
             ))}
           </div>
           <div className="memory-viewer-stage">
@@ -222,7 +246,7 @@ export default function MemoriesScreen() {
               aria-label="Next memory"
               onClick={() => setViewingIndex((current) => {
                 const next = (current ?? 0) + 1;
-                return next >= highlights.length ? null : next;
+                return next >= walkPhotos.length ? null : next;
               })}
             />
           </div>
@@ -238,15 +262,29 @@ export default function MemoriesScreen() {
         </div>
       ) : null}
 
-      {MONTHS.map((month) => {
+      {months.map((month) => {
         const monthPhotos = photos.filter((photo) => photo.monthId === month.id);
         return (
-          <section key={month.id} className="memories-month" aria-labelledby={`${month.id}-title`}>
+          <section key={month.id} className="memories-month" aria-labelledby={`month-${month.id}-title`}>
             <div className="memories-section-head">
-              <h2 id={`${month.id}-title`}>{month.title}</h2>
-              <span>{month.count} moments</span>
+              <h2 id={`month-${month.id}-title`}>{month.title}</h2>
+              <span>
+                {month.count + month.walkPhotos.length} {month.count + month.walkPhotos.length === 1 ? "moment" : "moments"}
+              </span>
             </div>
             <div className="memories-grid">
+              {month.walkPhotos.map((photo) => (
+                <button
+                  key={photo.id}
+                  type="button"
+                  className="memories-tile memories-photo-tile"
+                  aria-label={`Open memory from ${photo.label}, ${photo.date}`}
+                  onClick={() => setViewingIndex(walkPhotos.indexOf(photo))}
+                >
+                  <img className="memories-photo-image" src={photo.url} alt="" />
+                  <span className="memories-tile-day">{photo.day}</span>
+                </button>
+              ))}
               {month.moments.map((moment, index) => {
                 const photo = monthPhotos[index];
                 const photoSrc = photo?.src ?? moment.photoSrc;
